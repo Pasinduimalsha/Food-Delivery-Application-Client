@@ -8,8 +8,6 @@ pipeline {
 
     stages {
 
-          
-
             // stage('Ansible Configuration') {
             //     steps {
             //         script {

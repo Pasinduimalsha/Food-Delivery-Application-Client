@@ -1,5 +1,6 @@
-# Step 1: Build the React app using Node
-FROM node:20-alpine
+
+# Build stage
+FROM node:18-alpine AS build
 
 # Set working directory
 WORKDIR /app
@@ -7,12 +8,26 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies with legacy peer deps flag to handle conflicts
+RUN npm install --legacy-peer-deps
 
-# Copy the rest of the project files
+# Copy the rest of the app
 COPY . .
 
-EXPOSE 5173
+# Build the app
+RUN npm run build --legacy-peer-deps
 
-CMD ["npm","run","dev","--","--host","0.0.0.0"]
+# Production stage
+FROM nginx:1.25.0-alpine
+
+# Copy built assets from the build stage
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Copy nginx config if you have custom configuration
+# COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 80 since nginx uses this port by default
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
