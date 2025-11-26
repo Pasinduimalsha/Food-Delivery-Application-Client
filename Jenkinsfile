@@ -1,16 +1,16 @@
 pipeline {
   agent any
   stages {
+	 stage('Install Dependencies') {
+      steps {
+        sh 'npm ci'
+      }
+    }
+
     stage('Check for vulnerabilities') {
       steps {
         sh 'npm audit --parseable --production'
         // sh 'npm outdated || exit 0'
-      }
-    }
-
-    stage('download dependencies') {
-      steps {
-        sh 'npm ci'
       }
     }
 
@@ -27,7 +27,7 @@ pipeline {
     //   post {
     //     always {
     //       junit 'junit.xml'
-    //       example exampleReportFile: 'coverage/example-coverage.xml'
+    //       cobertura coberturaReportFile: 'coverage/cobertura-coverage.xml'
     //     }
     //   }
     // }
@@ -44,7 +44,7 @@ pipeline {
     //   }
     // }
   }
-  
+
 }
 
 
