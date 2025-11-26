@@ -3,12 +3,15 @@ pipeline {
   stages {
 	 stage('Install Dependencies') {
       steps {
-        sh 'npm ci'
+		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
+		sh 'npm ci'
+		}
       }
     }
 
     stage('Check for vulnerabilities') {
       steps {
+		
         sh 'npm audit --parseable --production'
         // sh 'npm outdated || exit 0'
       }
