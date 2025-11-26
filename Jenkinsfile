@@ -11,15 +11,18 @@ pipeline {
 
     stage('Check for vulnerabilities') {
       steps {
-		
+		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
         sh 'npm audit --parseable --production'
         // sh 'npm outdated || exit 0'
+		}
       }
     }
 
     stage('Check linting') {
       steps {
+		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
         sh 'npm run lint'
+		}
       }
     }
 
@@ -37,7 +40,9 @@ pipeline {
 
     stage('Build') {
       steps {
-        sh 'npm run build'
+		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
+    	sh 'npm run build'
+		}
       }
     }
 
