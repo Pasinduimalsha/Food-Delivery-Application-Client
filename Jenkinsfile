@@ -72,6 +72,8 @@ pipeline {
 				sh 'pwd;cd terraform/ ; terraform init'
 				sh "pwd;cd terraform/ ; terraform plan -out tfplan"
 				sh 'pwd;cd terraform/ ; terraform show -no-color tfplan > tfplan.txt'
+
+				stash name: 'tfplan-artifact', includes: 'terraform/tfplan, terraform/tfplan.txt'
 			}
 		}
 	}
@@ -84,6 +86,7 @@ pipeline {
 		steps {
 			script {
 				withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
+				unstash 'tfplan-artifact'
 				def plan = readFile 'terraform/tfplan.txt'
 				input message: "Do you want to apply the plan?",
 				parameters: [text(name: 'Plan', description: 'Please review the plan', defaultValue: plan)]
@@ -95,6 +98,7 @@ pipeline {
 		agent any
 		steps {
 			withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
+				unstash 'tfplan-artifact'
 				sh "pwd;cd terraform/ ; terraform apply -input=false tfplan"
 				sh "pwd;cd terraform/ ; terraform output -raw food_orderinf_client_deploy_server_ip"
 			}
