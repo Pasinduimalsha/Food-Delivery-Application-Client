@@ -25,7 +25,7 @@ resource "aws_security_group" "food_orderinf_client_deploy_server_sg" {
   }
 
   tags = {
-    Name = "Build Server"
+    Name = "Food Ordering Application Client's Deploy Server"
   }
 }
 
