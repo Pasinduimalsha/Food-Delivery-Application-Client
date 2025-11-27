@@ -58,7 +58,7 @@ pipeline {
 				script{
 					dir("terraform")
 					{
-						git "https://github.com/Pasinduimalsha/Food-Ordering-Application.git"
+						git "https://github.com/Pasinduimalsha/Food-Delivery-Application-Client.git"
 					}
 				}
 			}
