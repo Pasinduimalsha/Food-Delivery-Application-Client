@@ -171,13 +171,6 @@ pipeline {
     //     sh 'npm run test:e2e -- --headless --url https://www.example.com --config video=false || exit 0'
     //   }
     // }
-
-	post {
-		always {
-			cleanWs()
-		}
-	}
-
   }
 
 }
