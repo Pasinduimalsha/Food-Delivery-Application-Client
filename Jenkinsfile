@@ -133,7 +133,7 @@ pipeline {
 				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
 					echo "Connecting to Build Server: ${DEPLOY_SERVER}"
 					echo "Packing the code and create a docker image"
-					scp "-o StrictHostKeyChecking=no \
+					sh "scp -o StrictHostKeyChecking=no \
 						Dockerfile \
 						docker-compose.yml \
 						dist/* \
