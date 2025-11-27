@@ -99,7 +99,7 @@ pipeline {
 			withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
 				// unstash 'tfplan-artifact'
 				sh "pwd;cd terraform/ ; terraform apply -input=false tfplan"
-				sh "pwd;cd terraform/ ; terraform output -raw food_orderinf_client_deploy_server_ip"
+				sh "pwd;cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip"
 			}
 		}
 	}
@@ -109,7 +109,7 @@ pipeline {
 			script {
 				withEnv(["PATH+LOCAL=${LOCAL_BIN_PATH}"]) {
 					def clientServerIp = sh(
-						script: 'cd terraform/ ; terraform output -raw food_orderinf_client_deploy_server_ip',
+						script: 'cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip',
 						returnStdout: true
 					).trim()
 					echo "Client Server IP: ${clientServerIp}"
