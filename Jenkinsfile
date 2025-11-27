@@ -136,7 +136,7 @@ pipeline {
 					sh "scp -o StrictHostKeyChecking=no \
 						Dockerfile \
 						docker-compose.yml \
-						dist/* \
+						-r dist \
 						package.json \
 						package-lock.json \
 						vite.config.js \
