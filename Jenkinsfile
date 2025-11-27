@@ -104,7 +104,6 @@ pipeline {
 		}
 	}
 	stage('Get Server IPs') {
-		agent any
 		steps {
 			script {
 				withEnv(["PATH+LOCAL=${LOCAL_BIN_PATH}"]) {
