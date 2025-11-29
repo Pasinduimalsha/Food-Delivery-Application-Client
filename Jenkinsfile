@@ -180,10 +180,12 @@ pipeline {
 									${DEPLOY_SERVER}:/home/ubuntu/
 								"""
 							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
+							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} sudo usermod -aG docker ubuntu"
 							sh "ssh ${DEPLOY_SERVER} sudo docker login -u $USERNAME -p $PASSWORD"
 							sh "ssh ${DEPLOY_SERVER} sudo docker pull ${IMAGE_NAME}"
 							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-compose-script.sh ${IMAGE_NAME}'"
-							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'docker-compose up -d'"
+							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'sudo docker-compose up -d'"
+
 					}
 				}
 			}
