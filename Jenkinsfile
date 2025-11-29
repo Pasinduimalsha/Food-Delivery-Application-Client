@@ -134,26 +134,31 @@ pipeline {
 					echo "Connecting to Build Server: ${DEPLOY_SERVER}"
 					echo "Packing the code and create a docker image"
 					sh "ls -la"
-					sh """
-						scp -r -o StrictHostKeyChecking=no \
-							Dockerfile \
-							docker-compose.yml \
-							package.json \
-							package-lock.json \
-							vite.config.js \
-							dist \
-							${DEPLOY_SERVER}:/home/ubuntu/
-						"""
-					sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
-					sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'chmod +x npm-script.sh'"
-					sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/npm-script.sh'"
+					// sh """
+					// 	scp -r -o StrictHostKeyChecking=no \
+					// 		Dockerfile \
+					// 		docker-compose.yml \
+					// 		package.json \
+					// 		package-lock.json \
+					// 		vite.config.js \
+					// 		dist \
+					// 		docker-script.sh \
+					// 		npm-script.sh \
+					// 		${DEPLOY_SERVER}:/home/ubuntu/
+					// 	"""
+					// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
+					// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'chmod +x npm-script.sh'"
+					// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/npm-script.sh'"
 
 					// echo "Compiling code and creating JAR file on the DEPLOY_SERVER"
 					// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'mvn clean package -DskipTests'"
 
-					sh "ssh ${DEPLOY_SERVER} sudo docker build -t ${IMAGE_NAME} /home/ubuntu/"
-					sh "ssh ${DEPLOY_SERVER} sudo docker login -u $USERNAME -p $PASSWORD"
-					sh "ssh ${DEPLOY_SERVER} sudo docker push ${IMAGE_NAME}"
+					// sh "ssh ${DEPLOY_SERVER} sudo docker build -t ${IMAGE_NAME} /home/ubuntu/"
+					// sh "ssh ${DEPLOY_SERVER} sudo docker login -u $USERNAME -p $PASSWORD"
+					// sh "ssh ${DEPLOY_SERVER} sudo docker push ${IMAGE_NAME}"
+					sh "docker build -t ${IMAGE_NAME} ."
+					sh "docker login -u $USERNAME -p $PASSWORD"
+					sh "docker push ${IMAGE_NAME}"
 				}
 			}
 		}
