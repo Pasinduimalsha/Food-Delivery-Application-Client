@@ -126,9 +126,6 @@ pipeline {
 	agent any
 	steps {
 		script {
-			unstash 'client_conn_data'
-            def DEPLOY_SERVER = readFile('client_server_conn.txt').trim()
-
 			sshagent(['Jenkins-slave']){
 				withEnv(["PATH+LOCAL=${LOCAL_BIN_PATH}"]) {
 				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
@@ -165,26 +162,34 @@ pipeline {
 		}
 	}
 }
-// stage("Run the docker image using docker-compose"){
-// 	agent any
-// 	steps{
-// 		script{
-// 				unstash 'deploy_conn_data'
-// 				def DEPLOY_SERVER = readFile('deploy_server_conn.txt').trim()
+	stage("Run the docker image using docker-compose"){
+		agent any
+		steps{
+			script{
+					unstash 'deploy_conn_data'
+					def DEPLOY_SERVER = readFile('deploy_server_conn.txt').trim()
 
-// 			sshagent(['Jenkins-slave']){
-// 				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
-// 						echo "Pull the docker image"
-// 						sh "scp -o StrictHostKeyChecking=no -r ${WORKSPACE}/* ${DEPLOY_SERVER}:/home/ubuntu/"
-// 						sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
-// 						sh "ssh ${DEPLOY_SERVER} sudo docker login -u $USERNAME -p $PASSWORD"
-// 						sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-compose-script.sh ${IMAGE_NAME}'"
-// 				}
-// 			}
-// 		}
-// 	}
+				sshagent(['Jenkins-slave']){
+					withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
+							echo "Pull the docker image"
+							sh "ls -la"
+							sh """
+								scp -o StrictHostKeyChecking=no \
+									docker-script.sh \
+									docker-compose-script.sh \
+									${DEPLOY_SERVER}:/home/ubuntu/
+								"""
+							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
+							sh "ssh ${DEPLOY_SERVER} sudo docker login -u $USERNAME -p $PASSWORD"
+							sh "ssh ${DEPLOY_SERVER} sudo docker pull ${IMAGE_NAME}"
+							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-compose-script.sh ${IMAGE_NAME}'"
+							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'docker-compose up -d'"
+					}
+				}
+			}
+		}
 
-// }
+}
 
     // stage('Check unit:e2e') {
     //   steps {
