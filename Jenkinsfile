@@ -130,6 +130,7 @@ pipeline {
             def DEPLOY_SERVER = readFile('client_server_conn.txt').trim()
 
 			sshagent(['Jenkins-slave']){
+				withEnv(["PATH+LOCAL=${LOCAL_BIN_PATH}"]) {
 				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
 					echo "Connecting to Build Server: ${DEPLOY_SERVER}"
 					echo "Packing the code and create a docker image"
@@ -160,7 +161,7 @@ pipeline {
 					sh "docker login -u $USERNAME -p $PASSWORD"
 					sh "docker push ${IMAGE_NAME}"
 				}
-			}
+			}}
 		}
 	}
 }
