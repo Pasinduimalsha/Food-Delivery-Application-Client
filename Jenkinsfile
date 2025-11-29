@@ -166,8 +166,8 @@ pipeline {
 		agent any
 		steps{
 			script{
-					unstash 'deploy_conn_data'
-					def DEPLOY_SERVER = readFile('deploy_server_conn.txt').trim()
+					unstash 'client_conn_data'
+					def DEPLOY_SERVER = readFile('client_server_conn.txt.txt').trim()
 
 				sshagent(['Jenkins-slave']){
 					withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
