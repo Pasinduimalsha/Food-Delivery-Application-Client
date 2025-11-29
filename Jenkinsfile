@@ -133,14 +133,15 @@ pipeline {
 				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
 					echo "Connecting to Build Server: ${DEPLOY_SERVER}"
 					echo "Packing the code and create a docker image"
+					sh "ls -la"
 					sh """
-						scp -o StrictHostKeyChecking=no \
+						scp -r -o StrictHostKeyChecking=no \
 							Dockerfile \
 							docker-compose.yml \
 							package.json \
 							package-lock.json \
 							vite.config.js \
-							-r dist \
+							dist \
 							${DEPLOY_SERVER}:/home/ubuntu/
 						"""
 					sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
