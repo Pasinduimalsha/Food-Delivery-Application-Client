@@ -5,8 +5,11 @@ WORKDIR /app
 # copy package files first to leverage layer caching
 COPY package*.json ./
 
-# Use npm ci for faster, reproducible installs when lockfile exists
-RUN npm ci --legacy-peer-deps
+RUN if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then \
+			npm ci --legacy-peer-deps; \
+		else \
+			npm install --legacy-peer-deps; \
+		fi
 
 # copy rest of source and build
 COPY . .
