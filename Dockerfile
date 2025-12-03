@@ -1,22 +1,27 @@
-FROM node:18-alpine
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json .
+# copy package files first to leverage layer caching
+COPY package*.json ./
 
-RUN npm install
+# Use npm ci for faster, reproducible installs when lockfile exists
+RUN npm ci --legacy-peer-deps
 
-RUN npm install esbuild@latest
-
-RUN npm i -g serve
-
+# copy rest of source and build
 COPY . .
-
 RUN npm run build --legacy-peer-deps
 
-EXPOSE 3000
+## Final minimal image using nginx to serve static files
+FROM nginx:1.25-alpine
 
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Remove default nginx content and copy build output
+RUN rm -rf /usr/share/nginx/html/*
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
 
 # Local Development Server Command
-# CMD ["npm", "run", "dev", "--", "--host"]
+# For local development you can still use: `npm run dev -- --host`

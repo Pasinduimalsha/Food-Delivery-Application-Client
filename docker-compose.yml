@@ -7,7 +7,7 @@ services:
     environment:
       NODE_ENV: prod
     ports:
-      - "3000:5173"
+      - "3000:80"
     restart: always
     networks:
       - food_delivery_network
