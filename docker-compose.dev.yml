@@ -1,7 +1,7 @@
 version: '3.4'
 
 services:
-  FoodDeliveryAppClient:
+  food_delivery_app_client:
     build: .
     container_name: food-delivery-application-client
     image: food-delivery-application-client:v0.0.135

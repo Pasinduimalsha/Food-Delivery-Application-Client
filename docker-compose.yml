@@ -1,7 +1,7 @@
 version: '3.4'
 
 services:
-  FoodDeliveryAppClient:
+  food_delivery_app_client:
     container_name: food-delivery-application-client
     image: "${IMAGE_NAME}"
     environment:
