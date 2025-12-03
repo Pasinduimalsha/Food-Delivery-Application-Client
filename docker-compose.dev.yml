@@ -2,16 +2,23 @@ version: '3.4'
 
 services:
   FoodDeliveryAppClient:
+    build: .
     container_name: food-delivery-application-client
-    image: "${IMAGE_NAME}"
+    image: food-delivery-application-client:v0.0.135
     environment:
-      NODE_ENV: prod
+      NODE_ENV: dev
     ports:
       - "3000:5173"
     restart: always
     networks:
       - food_delivery_network
+    volumes:
+      - .:/app
+      - /app/node_modules
 
 networks:
   food_delivery_network:
     driver: bridge 
+
+
+# docker-compose -f docker-compose.dev.yml up 

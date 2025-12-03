@@ -16,5 +16,7 @@ RUN npm run build --legacy-peer-deps
 
 EXPOSE 3000
 
-CMD ["npm", "run", "dev", "--", "--host"]
-# CMD [ "serve", "-s", "dist" ]
+CMD ["serve", "-s", "dist", "-l", "3000"]
+
+# Local Development Server Command
+# CMD ["npm", "run", "dev", "--", "--host"]

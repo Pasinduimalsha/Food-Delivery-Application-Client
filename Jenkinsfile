@@ -47,13 +47,14 @@ pipeline {
     //   }
     // }
 
-    stage('Build') {
-      steps {
-		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
-    	sh 'npm run build'
-		}
-      }
-    }
+//        Dockerfile is already doing this
+//     stage('Build') {
+//       steps {
+// 		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
+//     	sh 'npm run build'
+// 		}
+//       }
+//     }
 
 	stage('checkout') {
 		steps {
