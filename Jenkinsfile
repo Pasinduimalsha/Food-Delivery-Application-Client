@@ -9,6 +9,7 @@ pipeline {
 	LOCAL_BIN_PATH = "/usr/local/bin:/opt/homebrew/bin"
 	IMAGE_NAME = "pasindu12345/food-delivery-application-client:v0.0.1$BUILD_NUMBER"
 	}
+
   stages {
 	 stage('Install Dependencies') {
       steps {
@@ -17,6 +18,28 @@ pipeline {
 		}
       }
     }
+
+	stage('Run unit tests (coverage)') {
+		steps {
+			sh 'npm test -- --coverage --ci'
+		}
+		post {
+			always {
+			archiveArtifacts artifacts: 'coverage/**', fingerprint: true
+			}
+		}
+	}
+
+	stage('Run Sonarqube') {
+            environment {
+                scannerHome = tool 'lil_sonar_tool';
+            }
+            steps {
+              withSonarQubeEnv(credentialsId: 'pasindu12345', installationName: 'lil_sonar_project') {
+                sh "${scannerHome}/bin/sonar-scanner"
+              }
+            }
+	}
 
     stage('Check for vulnerabilities') {
       steps {
