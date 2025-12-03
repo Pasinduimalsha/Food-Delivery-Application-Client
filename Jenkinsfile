@@ -21,7 +21,9 @@ pipeline {
 
 	stage('Run unit tests (coverage)') {
 		steps {
-			sh 'npm test -- --coverage --ci'
+			withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
+				sh 'npm test -- --coverage --ci'
+			}
 		}
 		post {
 			always {
