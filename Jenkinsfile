@@ -2,6 +2,7 @@ pipeline {
   agent any
    parameters {
         booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
+        booleanParam(name: 'runSonar', defaultValue: false, description: 'Run SonarQube code analysis?')
     }
   environment {
 	AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
@@ -33,6 +34,9 @@ pipeline {
 	}
 
 	stage('Run Sonarqube') {
+            when {
+                expression { params.runSonar == true }
+            }
             environment {
                 scannerHome = tool 'lil_sonar_tool';
             }
