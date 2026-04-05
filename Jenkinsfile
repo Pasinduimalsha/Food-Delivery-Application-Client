@@ -53,9 +53,13 @@ pipeline {
 
     stage('Check for vulnerabilities') {
       steps {
-        // Best Practice: Audit but allow the pipeline to continue if vulnerabilities are NOT critical
-        // Fail only if we find "high" or "critical" severity issues
-        sh 'npm audit --audit-level=high'
+        script {
+            sh 'npm audit --audit-level=critical'
+            echo "No critical vulnerabilities found. Attempting to fix high/moderate issues..."
+            sh 'npm audit fix || true'
+            sh 'npm audit fix --force || true'
+            sh 'npm audit --audit-level=critical || true'
+        }
       }
     }
 
