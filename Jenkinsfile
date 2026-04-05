@@ -147,21 +147,21 @@ pipeline {
 
 				def currentSourceHash = sh(
 					script: '''#!/usr/bin/env bash
-set -euo pipefail
-FILES=$(git ls-files Dockerfile docker-compose.yml package.json package-lock.json vite.config.js src public index.html 2>/dev/null || true)
-if [ -z "$FILES" ]; then
-  echo "NO_FILES"
-  exit 0
-fi
-(
-  for file in $FILES; do
-    if [ -f "$file" ]; then
-      printf "%s\n" "$file"
-      shasum -a 256 "$file"
-    fi
-  done
-) | shasum -a 256 | awk '{print $1}'
-''',
+					set -euo pipefail
+					FILES=$(git ls-files Dockerfile docker-compose.yml package.json package-lock.json vite.config.js src public index.html 2>/dev/null || true)
+					if [ -z "$FILES" ]; then
+					echo "NO_FILES"
+					exit 0
+					fi
+					(
+					for file in $FILES; do
+						if [ -f "$file" ]; then
+						printf "%s\n" "$file"
+						shasum -a 256 "$file"
+						fi
+					done
+					) | shasum -a 256 | awk '{print $1}'
+					''',
 					returnStdout: true
 				).trim()
 
@@ -252,15 +252,17 @@ fi
 
   post {
     always {
-      // 1. Delete the Jenkins Workspace to clear large folders like node_modules and .terraform
-      deleteDir() 
-      
-      // 2. Remove dangling Docker build cache and unused image layers
-      script {
-        try {
-            sh 'docker system prune -f'
-        } catch (Exception e) {
-            echo "Docker prune skipped or failed: ${e.getMessage()}"
+      node {
+        // 1. Delete the Jenkins Workspace to clear large folders like node_modules and .terraform
+        deleteDir() 
+        
+        // 2. Remove dangling Docker build cache and unused image layers
+        script {
+          try {
+              sh 'docker system prune -f'
+          } catch (Exception e) {
+              echo "Docker prune skipped or failed: ${e.getMessage()}"
+          }
         }
       }
     }
