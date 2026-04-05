@@ -4,6 +4,11 @@ pipeline {
       // Keep only the last 3 builds and artifacts to save Jenkins internal disk space
       buildDiscarder(logRotator(numToKeepStr: '3', artifactNumToKeepStr: '3'))
   }
+  tools {
+      // Ensure Node.js and NPM are available on the Jenkins agent
+      // Go to Manage Jenkins -> Tools -> NodeJS installations to define 'NodeJS_latest'
+      nodejs "NodeJS_latest"
+  }
    parameters {
         booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
         booleanParam(name: 'runSonar', defaultValue: false, description: 'Run SonarQube code analysis?')
@@ -17,6 +22,8 @@ pipeline {
   stages {
 	 stage('Install Dependencies') {
       steps {
+		sh 'node -v'
+		sh 'npm -v'
 		sh 'npm ci'
       }
     }
