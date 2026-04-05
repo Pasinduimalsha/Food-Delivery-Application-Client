@@ -1,12 +1,11 @@
 pipeline {
   agent any
   options {
-      // Keep only the last 3 builds and artifacts to save Jenkins internal disk space
       buildDiscarder(logRotator(numToKeepStr: '3', artifactNumToKeepStr: '3'))
   }
   tools {
       nodejs "NodeJS_latest"
-      terraform "Terraform_latest"
+    //   terraform "Terraform_latest"
   }
    parameters {
         booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
