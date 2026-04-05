@@ -193,6 +193,7 @@ pipeline {
 		when {
 			expression { env.SHOULD_BUILD_IMAGE == 'true' }
 		}
+		agent any
 		steps {
 			script {
 				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
@@ -210,6 +211,7 @@ pipeline {
 		when {
 			expression { env.SHOULD_BUILD_IMAGE == 'true' }
 		}
+		agent any
 		steps{
 			script{
 					unstash 'client_conn_data'
@@ -249,21 +251,23 @@ pipeline {
 
   }
 
-  post {
-    always {
-      // 1. Delete the Jenkins Workspace to clear large folders like node_modules and .terraform
-      deleteDir() 
-      
-      // 2. Remove dangling Docker build cache and unused image layers
-      script {
-        try {
-            sh 'docker system prune -f'
-        } catch (Exception e) {
-            echo "Docker prune skipped or failed: ${e.getMessage()}"
-        }
-      }
-    }
-  }
+//   post {
+//     always {
+//       node {
+//         // 1. Delete the Jenkins Workspace to clear large folders like node_modules and .terraform
+//         deleteDir() 
+        
+//         // 2. Remove dangling Docker build cache and unused image layers
+//         script {
+//           try {
+//               sh 'docker system prune -f'
+//           } catch (Exception e) {
+//               echo "Docker prune skipped or failed: ${e.getMessage()}"
+//           }
+//         }
+//       }
+//     }
+//   }
 }
 
 
