@@ -9,7 +9,8 @@ pipeline {
         booleanParam(name: 'runSonar', defaultValue: false, description: 'Run SonarQube code analysis?')
     }
   environment {
-	AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+	// AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+	AWS_ACCESS_KEY_ID = 'test'
     AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
 	IMAGE_REPO = "pasindu12345/food-delivery-application-client"
 	IMAGE_NAME = "${IMAGE_REPO}:latest"
