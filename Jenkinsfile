@@ -5,8 +5,6 @@ pipeline {
       buildDiscarder(logRotator(numToKeepStr: '3', artifactNumToKeepStr: '3'))
   }
   tools {
-      // Ensure Node.js and NPM are available on the Jenkins agent
-      // Go to Manage Jenkins -> Tools -> NodeJS installations to define 'NodeJS_latest'
       nodejs "NodeJS_latest"
   }
    parameters {
