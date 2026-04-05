@@ -3,7 +3,7 @@ variable "instance_type" {
 }
 
 variable "region" {
-    default = "us-east-1a"
+    default = "us-east-1"
 }
 
 variable "ami"{
