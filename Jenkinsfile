@@ -1,7 +1,8 @@
 pipeline {
   agent any
   options {
-      buildDiscarder(logRotator(numToKeepStr: '3', artifactNumToKeepStr: '3'))
+      // Very aggressive build rotation: Keep ONLY last 2 builds given 6GB disk space
+      buildDiscarder(logRotator(numToKeepStr: '2', artifactNumToKeepStr: '2'))
   }
   tools {
       nodejs "NodeJS_latest"
@@ -81,23 +82,21 @@ pipeline {
     //   }
     // }
 
-//        Dockerfile is already doing this
-//     stage('Build') {
-//       steps {
-//     	sh 'npm run build'
-//       }
-//     }
+	//        Dockerfile is already doing this
+	//     stage('Build') {
+	//       steps {
+	//     	sh 'npm run build'
+	//       }
+	//     }
 
-	stage('checkout') {
-		steps {
-				script{
-					dir("terraform")
-					{
-						git "https://github.com/Pasinduimalsha/Food-Delivery-Application-Client.git"
-					}
-				}
-			}
-    }
+	// stage('checkout') {
+	// 	steps {
+	// 		script {
+	// 			// Checkout the full repository into the workspace root
+	// 			git "https://github.com/Pasinduimalsha/Food-Delivery-Application-Client.git"
+	// 		}
+	// 	}
+    // }
 
 	stage('Plan') {
 		steps {
@@ -230,8 +229,15 @@ pipeline {
 		}
 		post {
 			success {
-				deleteDir()
-				echo "Large workspace (node_modules, etc.) cleaned up after successful push."
+				script {
+					// 1. Instantly delete the images we built to free up several GBs (already pushed)
+					sh "docker rmi ${IMAGE_VERSION_TAG} ${IMAGE_NAME} || true"
+					// 2. Clear old/dangling build layers to maximize free space
+					sh "docker image prune -f"
+					// 3. Delete the bulky workspace (node_modules, etc.)
+					deleteDir()
+				}
+				echo "Aggressive storage cleanup: Docker images and Workspace cleared."
 			}
 		}
 	}
