@@ -9,9 +9,6 @@ pipeline {
         booleanParam(name: 'runSonar', defaultValue: false, description: 'Run SonarQube code analysis?')
     }
   environment {
-	// AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
-	AWS_ACCESS_KEY_ID = 'test'
-    AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
 	IMAGE_REPO = "pasindu12345/food-delivery-application-client"
 	IMAGE_NAME = "${IMAGE_REPO}:latest"
 	IMAGE_VERSION_TAG = "${IMAGE_REPO}:v0.0.${BUILD_NUMBER}"
@@ -94,11 +91,16 @@ pipeline {
 
 	stage('Plan') {
 		steps {
+			withCredentials([
+				string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+				string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+			]) {
 				sh 'pwd;cd terraform/ ; terraform init'
 				sh "pwd;cd terraform/ ; terraform plan -out=tfplan"
 				sh 'pwd;cd terraform/ ; terraform show -no-color tfplan > tfplan.txt'
 
 				// stash name: 'tfplan-artifact', , includes: '**'
+			}
 		}
 	}
 	stage('Approval') {
@@ -118,14 +120,23 @@ pipeline {
 	}
 	stage('Apply') {
 		steps {
+			withCredentials([
+				string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+				string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+			]) {
 				// unstash 'tfplan-artifact'
 				sh "pwd;cd terraform/ ; terraform apply -input=false tfplan"
 				sh "pwd;cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip"
+			}
 		}
 	}
 	stage('Get Server IPs') {
 		steps {
 			script {
+				withCredentials([
+					string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+					string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+				]) {
 					def clientServerIp = sh(
 						script: 'cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip',
 						returnStdout: true
@@ -136,6 +147,7 @@ pipeline {
 
 					writeFile file: 'client_server_conn.txt', text: clientServerConn
 					stash name: 'client_conn_data', includes: 'client_server_conn.txt'
+				}
 			}
 		}
 	}
