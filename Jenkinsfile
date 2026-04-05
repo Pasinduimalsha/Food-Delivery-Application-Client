@@ -6,6 +6,7 @@ pipeline {
   }
   tools {
       nodejs "NodeJS_latest"
+      terraform "Terraform_latest"
   }
    parameters {
         booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
