@@ -1,5 +1,5 @@
 variable "instance_type" {
-    default = "t2.micro"
+    default = "t3.micro"
 }
 
 variable "region" {
@@ -7,11 +7,11 @@ variable "region" {
 }
 
 variable "ami"{
-    default = "ami-0ecb62995f68bb549"
+    default = "ami-0ec10929233384c7f"
 }
 
 variable "key_name" {
     description = "Name of the AWS key pair to use for EC2 instances"
     type        = string
-    default     = "sandatharu"
+    default     = "Jenkins"
 }

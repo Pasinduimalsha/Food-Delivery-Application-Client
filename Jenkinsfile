@@ -1,5 +1,9 @@
 pipeline {
   agent any
+  options {
+      // Keep only the last 3 builds and artifacts to save Jenkins internal disk space
+      buildDiscarder(logRotator(numToKeepStr: '3', artifactNumToKeepStr: '3'))
+  }
    parameters {
         booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
         booleanParam(name: 'runSonar', defaultValue: false, description: 'Run SonarQube code analysis?')
@@ -7,24 +11,21 @@ pipeline {
   environment {
 	AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
-	LOCAL_BIN_PATH = "/usr/local/bin:/opt/homebrew/bin"
-	IMAGE_NAME = "pasindu12345/food-delivery-application-client:v0.0.1$BUILD_NUMBER"
+	IMAGE_REPO = "pasindu12345/food-delivery-application-client"
+	IMAGE_NAME = "${IMAGE_REPO}:latest"
+	IMAGE_VERSION_TAG = "${IMAGE_REPO}:v0.0.${BUILD_NUMBER}"
 	}
 
   stages {
 	 stage('Install Dependencies') {
       steps {
-		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
 		sh 'npm ci'
-		}
       }
     }
 
 	stage('Run unit tests (coverage)') {
 		steps {
-			withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
 				sh 'npm test -- --coverage --ci'
-			}
 		}
 		post {
 			always {
@@ -49,18 +50,14 @@ pipeline {
 
     stage('Check for vulnerabilities') {
       steps {
-		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
         sh 'npm audit --parseable --production'
         // sh 'npm outdated || exit 0'
-		}
       }
     }
 
     stage('Check linting') {
       steps {
-		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
         sh 'npm run lint'
-		}
       }
     }
 
@@ -79,9 +76,7 @@ pipeline {
 //        Dockerfile is already doing this
 //     stage('Build') {
 //       steps {
-// 		withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
 //     	sh 'npm run build'
-// 		}
 //       }
 //     }
 
@@ -98,13 +93,11 @@ pipeline {
 
 	stage('Plan') {
 		steps {
-			withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
 				sh 'pwd;cd terraform/ ; terraform init'
 				sh "pwd;cd terraform/ ; terraform plan -out=tfplan"
 				sh 'pwd;cd terraform/ ; terraform show -no-color tfplan > tfplan.txt'
 
 				// stash name: 'tfplan-artifact', , includes: '**'
-			}
 		}
 	}
 	stage('Approval') {
@@ -115,28 +108,23 @@ pipeline {
 		}
 		steps {
 			script {
-				withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
 				// unstash 'tfplan-artifact'
 				def plan = readFile 'terraform/tfplan.txt'
 				input message: "Do you want to apply the plan?",
 				parameters: [text(name: 'Plan', description: 'Please review the plan', defaultValue: plan)]
-				}
 			}
 		}
 	}
 	stage('Apply') {
 		steps {
-			withEnv(["PATH+LOCAL=/usr/local/bin:/opt/homebrew/bin"]){
 				// unstash 'tfplan-artifact'
 				sh "pwd;cd terraform/ ; terraform apply -input=false tfplan"
 				sh "pwd;cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip"
-			}
 		}
 	}
 	stage('Get Server IPs') {
 		steps {
 			script {
-				withEnv(["PATH+LOCAL=${LOCAL_BIN_PATH}"]) {
 					def clientServerIp = sh(
 						script: 'cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip',
 						returnStdout: true
@@ -147,52 +135,82 @@ pipeline {
 
 					writeFile file: 'client_server_conn.txt', text: clientServerConn
 					stash name: 'client_conn_data', includes: 'client_server_conn.txt'
+			}
+		}
+	}
+
+	stage('Detect App Changes') {
+		steps {
+			script {
+				unstash 'client_conn_data'
+				def DEPLOY_SERVER = readFile('client_server_conn.txt').trim()
+
+				def currentSourceHash = sh(
+					script: '''#!/usr/bin/env bash
+set -euo pipefail
+FILES=$(git ls-files Dockerfile docker-compose.yml package.json package-lock.json vite.config.js src public index.html 2>/dev/null || true)
+if [ -z "$FILES" ]; then
+  echo "NO_FILES"
+  exit 0
+fi
+(
+  for file in $FILES; do
+    if [ -f "$file" ]; then
+      printf "%s\n" "$file"
+      shasum -a 256 "$file"
+    fi
+  done
+) | shasum -a 256 | awk '{print $1}'
+''',
+					returnStdout: true
+				).trim()
+
+				def previousSourceHash = ''
+				sshagent(['Jenkins-slave']) {
+					previousSourceHash = sh(
+						script: "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'cat /home/ubuntu/.food_delivery_client_source_hash 2>/dev/null || true'",
+						returnStdout: true
+					).trim()
+				}
+
+				echo "Current source hash: ${currentSourceHash}"
+				echo "Previous source hash: ${previousSourceHash ?: 'NONE'}"
+
+				if (currentSourceHash && currentSourceHash != 'NO_FILES' && currentSourceHash != previousSourceHash) {
+					env.SHOULD_BUILD_IMAGE = 'true'
+					env.CURRENT_SOURCE_HASH = currentSourceHash
+					echo 'App changes detected. Image build/push will run.'
+				} else {
+					env.SHOULD_BUILD_IMAGE = 'false'
+					env.CURRENT_SOURCE_HASH = previousSourceHash
+					echo 'No app changes detected. Skipping image build/push and compose rollout.'
 				}
 			}
 		}
 	}
 
 	stage("Build the docker image and push to dockerhub"){
-	agent any
-	steps {
-		script {
-			sshagent(['Jenkins-slave']){
-				withEnv(["PATH+LOCAL=${LOCAL_BIN_PATH}"]) {
-				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
-					// echo "Connecting to Build Server: ${DEPLOY_SERVER}"
-					echo "Packing the code and create a docker image"
+		when {
+			expression { env.SHOULD_BUILD_IMAGE == 'true' }
+		}
+		agent any
+		steps {
+			script {
+				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
+					echo "Packing the code and creating docker images"
 					sh "ls -la"
-					// sh """
-					// 	scp -r -o StrictHostKeyChecking=no \
-					// 		Dockerfile \
-					// 		docker-compose.yml \
-					// 		package.json \
-					// 		package-lock.json \
-					// 		vite.config.js \
-					// 		dist \
-					// 		docker-script.sh \
-					// 		npm-script.sh \
-					// 		${DEPLOY_SERVER}:/home/ubuntu/
-					// 	"""
-					// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
-					// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'chmod +x npm-script.sh'"
-					// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/npm-script.sh'"
-
-					// echo "Compiling code and creating JAR file on the DEPLOY_SERVER"
-					// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'mvn clean package -DskipTests'"
-
-					// sh "ssh ${DEPLOY_SERVER} sudo docker build -t ${IMAGE_NAME} /home/ubuntu/"
-					// sh "ssh ${DEPLOY_SERVER} sudo docker login -u $USERNAME -p $PASSWORD"
-					// sh "ssh ${DEPLOY_SERVER} sudo docker push ${IMAGE_NAME}"
-					sh "docker build -t ${IMAGE_NAME} ."
-					sh "docker login -u $USERNAME -p $PASSWORD"
+					sh "docker build -t ${IMAGE_VERSION_TAG} -t ${IMAGE_NAME} ."
+					sh 'echo "$PASSWORD" | docker login -u "$USERNAME" --password-stdin'
+					sh "docker push ${IMAGE_VERSION_TAG}"
 					sh "docker push ${IMAGE_NAME}"
 				}
-			}}
+			}
 		}
 	}
-}
 	stage("Run the docker image using docker-compose"){
+		when {
+			expression { env.SHOULD_BUILD_IMAGE == 'true' }
+		}
 		agent any
 		steps{
 			script{
@@ -215,6 +233,7 @@ pipeline {
 							sh "ssh ${DEPLOY_SERVER} sudo docker login -u $USERNAME -p $PASSWORD"
 							sh "ssh ${DEPLOY_SERVER} sudo docker pull ${IMAGE_NAME}"
 							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-compose-script.sh ${IMAGE_NAME}'"
+							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'echo ${CURRENT_SOURCE_HASH} > /home/ubuntu/.food_delivery_client_source_hash'"
 							// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'sudo docker-compose up -d ${IMAGE_NAME}'"
 
 					}
@@ -231,8 +250,22 @@ pipeline {
     // }
   }
 
+  post {
+    always {
+      // 1. Delete the Jenkins Workspace to clear large folders like node_modules and .terraform
+      deleteDir() 
+      
+      // 2. Remove dangling Docker build cache and unused image layers
+      script {
+        try {
+            sh 'docker system prune -f'
+        } catch (Exception e) {
+            echo "Docker prune skipped or failed: ${e.getMessage()}"
+        }
+      }
+    }
+  }
 }
-
 
 
 // REF:

@@ -1,5 +1,6 @@
 FROM node:18-alpine AS builder
 
+# mkdir /app && cd /app in container
 WORKDIR /app
 
 # copy package files first to leverage layer caching

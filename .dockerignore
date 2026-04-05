@@ -17,6 +17,6 @@ src/**/test
 *.tgz
 
 # optional lockfiles that don't need to be in context
-package-lock.json
+# package-lock.json
 yarn.lock
 pnpm-lock.yaml
