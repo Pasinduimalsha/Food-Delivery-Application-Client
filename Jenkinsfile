@@ -19,6 +19,12 @@ pipeline {
 	}
 
   stages {
+	 stage('Quick Clean') {
+      steps {
+		// Clear Docker cache before starting anything
+		sh 'docker system prune -f || true'
+      }
+    }
 	 stage('Install Dependencies') {
       steps {
 		sh 'node -v'
@@ -67,6 +73,13 @@ pipeline {
     stage('Check linting') {
       steps {
         sh 'npm run lint'
+      }
+      post {
+        always {
+            // Delete Node Modules IMMEDIATELY after linting to free up 1.3 GB
+            sh 'rm -rf node_modules'
+            echo "Large node_modules folder cleaned up to prepare for Docker build."
+        }
       }
     }
 
