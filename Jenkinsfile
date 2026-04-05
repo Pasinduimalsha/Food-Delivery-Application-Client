@@ -228,6 +228,12 @@ pipeline {
 				}
 			}
 		}
+		post {
+			success {
+				deleteDir()
+				echo "Large workspace (node_modules, etc.) cleaned up after successful push."
+			}
+		}
 	}
 	stage("Run the docker image using docker-compose"){
 		when {
