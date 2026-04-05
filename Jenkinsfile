@@ -227,19 +227,6 @@ pipeline {
 				}
 			}
 		}
-		post {
-			success {
-				script {
-					// 1. Instantly delete the images we built to free up several GBs (already pushed)
-					sh "docker rmi ${IMAGE_VERSION_TAG} ${IMAGE_NAME} || true"
-					// 2. Clear old/dangling build layers to maximize free space
-					sh "docker image prune -f"
-					// 3. Delete the bulky workspace (node_modules, etc.)
-					deleteDir()
-				}
-				echo "Aggressive storage cleanup: Docker images and Workspace cleared."
-			}
-		}
 	}
 	stage("Run the docker image using docker-compose"){
 		when {
@@ -285,17 +272,21 @@ pipeline {
 
   post {
     always {
-      // 1. Delete the Jenkins Workspace to clear large folders like node_modules and .terraform
-      deleteDir() 
-      
-      // 2. Remove dangling Docker build cache and unused image layers
       script {
         try {
+            // 1. Instantly delete the images we built (already pushed)
+            sh "docker rmi ${IMAGE_VERSION_TAG} ${IMAGE_NAME} || true"
+            // 2. Clear build layers
+            sh "docker image prune -f"
+            // 3. Clear all leftover Docker resources
             sh 'docker system prune -f'
+            // 4. Delete the bulky workspace (node_modules, etc.)
+            deleteDir()
         } catch (Exception e) {
-            echo "Docker prune skipped or failed: ${e.getMessage()}"
+            echo "Cleanup skipped or failed: ${e.getMessage()}"
         }
       }
+      echo "Aggressive storage cleanup: Docker images and Workspace cleared."
     }
   }
 }
