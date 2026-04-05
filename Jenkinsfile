@@ -269,7 +269,7 @@ pipeline {
                         sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-compose-script.sh ${IMAGE_NAME}'"
                         
                         sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'echo ${CURRENT_SOURCE_HASH} > /home/ubuntu/.food_delivery_client_source_hash'"
-                    }
+                    
                 }
             }
         }
