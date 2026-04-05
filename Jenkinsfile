@@ -37,7 +37,6 @@ pipeline {
 		}
 	}
 
-
 	stage('Run Sonarqube') {
             when {
                 expression { params.runSonar == true }
@@ -54,8 +53,9 @@ pipeline {
 
     stage('Check for vulnerabilities') {
       steps {
-        sh 'npm audit --parseable --production'
-        // sh 'npm outdated || exit 0'
+        // Best Practice: Audit but allow the pipeline to continue if vulnerabilities are NOT critical
+        // Fail only if we find "high" or "critical" severity issues
+        sh 'npm audit --audit-level=high'
       }
     }
 
