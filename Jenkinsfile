@@ -241,38 +241,39 @@ pipeline {
 			}
 		}
 	}
-	stage("Run the docker image using docker-compose"){
-		when {
-			expression { env.SHOULD_BUILD_IMAGE == 'true' }
-		}
-		steps{
-			script{
-					unstash 'client_conn_data'
-					def DEPLOY_SERVER = readFile('client_server_conn.txt').trim()
+    stage("Run the docker image using docker-compose") {
+        when {
+            expression { env.SHOULD_BUILD_IMAGE == 'true' }
+        }
+        steps {
+            script {
+                unstash 'client_conn_data'
+                def DEPLOY_SERVER = readFile('client_server_conn.txt').trim()
 
 				sshagent(['Jenkins-slave']){
 					withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
 							echo "Pull the docker image"
 							sh "ls -la"
-							sh """
-								scp -o StrictHostKeyChecking=no \
-									docker-script.sh \
-									docker-compose-script.sh \
-									docker-compose.yml \
-									${DEPLOY_SERVER}:/home/ubuntu/
-								"""
-							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
+                        sh """
+                            scp -o StrictHostKeyChecking=no \
+                                docker-script.sh \
+                                docker-compose-script.sh \
+                                docker-compose.yml \
+                                ${DEPLOY_SERVER}:/home/ubuntu/
+                        """
+                        
+                        sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
 							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} sudo usermod -aG docker ubuntu"
 							sh "ssh ${DEPLOY_SERVER} sudo docker login -u $USERNAME -p $PASSWORD"
 							sh "ssh ${DEPLOY_SERVER} sudo docker pull ${IMAGE_NAME}"
-							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-compose-script.sh ${IMAGE_NAME}'"
-							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'echo ${CURRENT_SOURCE_HASH} > /home/ubuntu/.food_delivery_client_source_hash'"
-							// sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'sudo docker-compose up -d ${IMAGE_NAME}'"
-
-					}
-				}
-			}
-		}
+                        sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-compose-script.sh ${IMAGE_NAME}'"
+                        
+                        sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'echo ${CURRENT_SOURCE_HASH} > /home/ubuntu/.food_delivery_client_source_hash'"
+                    }
+                }
+            }
+        }
+    }
 
 }
 

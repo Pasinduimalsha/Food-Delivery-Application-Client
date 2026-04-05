@@ -28,7 +28,7 @@ if [ ! -f "${COMPOSE_FILE}" ]; then
 fi
 
 echo "Starting docker-compose with ${COMPOSE_FILE}..."
-# Pass IMAGE_NAME through sudo's environment explicitly
-sudo env IMAGE_NAME="${IMAGE_NAME}" docker-compose -f "${COMPOSE_FILE}" up -d
+# Use the passed IMAGE_NAME to update the specific service
+sudo env IMAGE_NAME="${IMAGE_NAME}" docker-compose -f "${COMPOSE_FILE}" up -d --remove-orphans
 
 docker-compose --version
