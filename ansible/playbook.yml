@@ -1,0 +1,14 @@
+---
+- name: Configure Server and Deploy Application
+  hosts: all
+  become: yes
+  vars:
+    app_path: /home/ubuntu/app
+    # Variables below are passed from Jenkins via --extra-vars
+    # image_name: ""
+    # docker_user: ""
+    # docker_password: ""
+
+  roles:
+    - docker
+    - app

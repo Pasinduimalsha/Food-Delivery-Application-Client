@@ -248,28 +248,34 @@ pipeline {
         steps {
             script {
                 unstash 'client_conn_data'
-                def DEPLOY_SERVER = readFile('client_server_conn.txt').trim()
+                // Parse the IP from 'ubuntu@IP'
+                def DEPLOY_SERVER_CONN = readFile('client_server_conn.txt').trim()
+                def DEPLOY_SERVER_IP = DEPLOY_SERVER_CONN.split('@')[1]
 
-				sshagent(['Jenkins-slave']){
-					withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]){
-							echo "Pull the docker image"
-							sh "ls -la"
+                sshagent(['Jenkins-slave']) {
+                    withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
+                        echo "Deploying to ${DEPLOY_SERVER_IP} using Ansible"
+                        
+                        // 1. Install necessary collections locally on Jenkins
+                        sh "ansible-galaxy collection install -r ansible/requirements.yml"
+
+                        // 2. Run the deployment playbook
                         sh """
-                            scp -o StrictHostKeyChecking=no \
-                                docker-script.sh \
-                                docker-compose-script.sh \
-                                docker-compose.yml \
-                                ${DEPLOY_SERVER}:/home/ubuntu/
+                            ansible-playbook -i '${DEPLOY_SERVER_IP},' \
+                                -u ubuntu \
+                                --ssh-common-args='-o StrictHostKeyChecking=no' \
+                                -e "image_name=${IMAGE_NAME} docker_user=${USERNAME} docker_password=${PASSWORD}" \
+                                ansible/playbook.yml
                         """
                         
-                        sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-script.sh'"
-							sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} sudo usermod -aG docker ubuntu"
-							sh "ssh ${DEPLOY_SERVER} sudo docker login -u $USERNAME -p $PASSWORD"
-							sh "ssh ${DEPLOY_SERVER} sudo docker pull ${IMAGE_NAME}"
-                        sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'bash ~/docker-compose-script.sh ${IMAGE_NAME}'"
-                        
-                        sh "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'echo ${CURRENT_SOURCE_HASH} > /home/ubuntu/.food_delivery_client_source_hash'"
-                    
+                        // Update the success hash on the server using an Ansible ad-hoc command to stay consistent
+                        sh """
+                            ansible all -i '${DEPLOY_SERVER_IP},' \
+                                -u ubuntu \
+                                --ssh-common-args='-o StrictHostKeyChecking=no' \
+                                -m shell -a "echo ${CURRENT_SOURCE_HASH} > /home/ubuntu/.food_delivery_client_source_hash"
+                        """
+                    }
                 }
             }
         }
