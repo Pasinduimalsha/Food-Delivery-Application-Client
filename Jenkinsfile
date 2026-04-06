@@ -280,15 +280,9 @@ pipeline {
             }
         }
     }
-
-}
+  }
 
     // stage('Check unit:e2e') {
-    //   steps {
-    //     sh 'npm run test:e2e -- --headless --url https://www.example.com --config video=false || exit 0'
-    //   }
-    // }
-  }
 
   post {
     always {
