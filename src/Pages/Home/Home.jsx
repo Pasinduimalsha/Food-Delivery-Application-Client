@@ -7,7 +7,7 @@ const Home = () => {
 
   // Rest of the component remains the same
   const foodItems = [
-    { id: 1, name: 'Pizza Margherita', price: '$12.99', image: '/api/placeholder/200/200' },
+    { id: 1, name: 'Pizza Margherit', price: '$12.99', image: '/api/placeholder/200/200' },
     { id: 2, name: 'Burger Deluxe', price: '$9.99', image: '/api/placeholder/200/200' },
     { id: 3, name: 'Sushi Platter', price: '$24.99', image: '/api/placeholder/200/200' },
     { id: 4, name: 'Pasta Carbonara', price: '$14.99', image: '/api/placeholder/200/200' },
