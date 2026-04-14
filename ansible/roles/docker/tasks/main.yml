@@ -35,10 +35,10 @@
     state: present
 
 - name: Install Docker SDK for Python (required for Ansible docker modules)
-  pip:
-    name: 
-      - docker
-      - docker-compose
+  apt:
+    name:
+      - python3-docker
+      - python3-docker-compose
     state: present
 
 - name: Ensure docker-compose binary is installed (standalone version)
