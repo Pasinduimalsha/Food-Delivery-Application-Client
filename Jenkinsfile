@@ -21,8 +21,12 @@ pipeline {
   stages {
 	 stage('Quick Clean') {
       steps {
-		// Clear Docker cache before starting anything
-		sh 'docker system prune -f || true'
+		// Report disk status before cleaning
+		sh 'df -h'
+		// Aggressively clear ALL unused Docker images and build cache, not just dangling ones
+		sh 'docker system prune -af || true'
+		// Report disk status after cleaning
+		sh 'df -h'
       }
     }
 	 stage('Install Dependencies') {
@@ -291,10 +295,12 @@ pipeline {
             // 1. Instantly delete the images we built (already pushed)
             sh "docker rmi ${IMAGE_VERSION_TAG} ${IMAGE_NAME} || true"
             // 2. Clear build layers
-            sh "docker image prune -f"
-            // 3. Clear all leftover Docker resources
-            sh 'docker system prune -f'
-            // 4. Delete the bulky workspace (node_modules, etc.)
+            sh "docker image prune -af || true"
+            // 3. Clear all leftover Docker resources (including unused images)
+            sh 'docker system prune -af || true'
+            // 4. Report disk status
+            sh 'df -h'
+            // 5. Delete the bulky workspace (node_modules, etc.)
             deleteDir()
         } catch (Exception e) {
             echo "Cleanup skipped or failed: ${e.getMessage()}"
