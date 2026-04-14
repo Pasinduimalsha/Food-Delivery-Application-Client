@@ -298,9 +298,16 @@ pipeline {
             sh "docker image prune -af || true"
             // 3. Clear all leftover Docker resources (including unused images)
             sh 'docker system prune -af || true'
-            // 4. Report disk status
+            // 4. Clear SonarQube scanner cache
+            sh 'sudo rm -rf /var/lib/jenkins/.sonar/cache/* || true'
+            // 5. Purge disabled/old Snaps and clear snap seed
+            sh '''
+                snap list --all | awk '/disabled/{print $1, $3}' | while read snapname revision; do sudo snap remove "$snapname" --revision "$revision"; done || true
+                sudo rm -rf /var/lib/snapd/seed/snaps/* || true
+            '''
+            // 6. Report disk status
             sh 'df -h'
-            // 5. Delete the bulky workspace (node_modules, etc.)
+            // 7. Delete the bulky workspace (node_modules, etc.)
             deleteDir()
         } catch (Exception e) {
             echo "Cleanup skipped or failed: ${e.getMessage()}"
