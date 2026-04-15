@@ -41,6 +41,10 @@ resource "aws_security_group" "food_ordering_client_sg" {
   tags = {
     Name = "Food Ordering Application Client SG"
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_instance" "food_ordering_client_build_server" {
