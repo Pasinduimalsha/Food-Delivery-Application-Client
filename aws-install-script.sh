@@ -1,43 +1,33 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+# Install to the current project workspace to avoid all permission issues
+INSTALL_DIR="$(pwd)/aws-cli-inner"
+BIN_DIR="$(pwd)/aws-bin"
 
-# Ensure AWS CLI is installed on the Jenkins server
-# We install it locally in the workspace if it's not present globally
-# This avoids 'sudo' password prompts.
+mkdir -p "$BIN_DIR"
 
-AWS_LOCAL_BIN="${WORKSPACE}/aws-bin/aws"
+if ! [ -f "$BIN_DIR/aws" ]; then
+    echo "AWS CLI not found in workspace, installing to $BIN_DIR..."
+    
+    # Download
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    
+    # Unzip using python
+    python3 -m zipfile -e awscliv2.zip .
+    
+    # FIX: Grant execution permissions to the extracted installer
+    chmod +x ./aws/install
+    chmod +x ./aws/dist/aws
+    
+    # Install into workspace folders
+    ./aws/install -i "$INSTALL_DIR" -b "$BIN_DIR" --update
+    
+    # Verify and ensure the binary is executable
+    chmod +x "$BIN_DIR/aws"
+    "$BIN_DIR/aws" --version
 
-if ! command -v aws >/dev/null 2>&1 && [ ! -f "$AWS_LOCAL_BIN" ]; then
-    echo "AWS CLI not found. Installing locally in workspace..."
-    
-    mkdir -p "${WORKSPACE}/aws-install-tmp"
-    cd "${WORKSPACE}/aws-install-tmp"
-    
-    curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-    
-    # Check if unzip is available
-    if ! command -v unzip >/dev/null 2>&1; then
-        echo "Error: unzip is required to install AWS CLI locally. Please install unzip on the host or use a different agent."
-        exit 1
-    fi
-    
-    unzip -q awscliv2.zip
-    
-    # Install to workspace directories
-    ./aws/install -i "${WORKSPACE}/aws-cli-inner" -b "${WORKSPACE}/aws-bin" --update
-    
-    cd "${WORKSPACE}"
-    rm -rf "${WORKSPACE}/aws-install-tmp"
-    echo "AWS CLI installed locally at ${WORKSPACE}/aws-bin/aws"
+    # Cleanup installer
+    rm -rf awscliv2.zip ./aws
+    echo "AWS CLI installed successfully to $BIN_DIR"
 else
-    if command -v aws >/dev/null 2>&1; then
-        echo "AWS CLI already installed globally."
-        mkdir -p "${WORKSPACE}/aws-bin"
-        ln -sf $(which aws) "${WORKSPACE}/aws-bin/aws"
-    else
-        echo "AWS CLI already installed locally in workspace."
-    fi
+    echo "AWS CLI already present in workspace."
 fi
-
-# Verify
-${WORKSPACE}/aws-bin/aws --version
