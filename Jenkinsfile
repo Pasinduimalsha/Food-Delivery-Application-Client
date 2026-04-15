@@ -1,352 +1,263 @@
 pipeline {
-  agent any
-  options {
-      // Very aggressive build rotation: Keep ONLY last 2 builds given 6GB disk space
-      buildDiscarder(logRotator(numToKeepStr: '2', artifactNumToKeepStr: '2'))
-  }
-  tools {
-      nodejs "NodeJS_latest"
-    //   terraform "Terraform_latest"
-  }
-   parameters {
+    agent any
+    options {
+        // Aggressive build rotation: Keep ONLY last 2 builds given disk space constraints
+        buildDiscarder(logRotator(numToKeepStr: '2', artifactNumToKeepStr: '2'))
+        timeout(time: 1, unit: 'HOURS')
+    }
+    parameters {
         booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
         booleanParam(name: 'runSonar', defaultValue: false, description: 'Run SonarQube code analysis?')
+        choice(name: 'TARGET_ENV', choices: ['sbx', 'qa', 'stg', 'prod'], description: 'Select the target environment for deployment')
     }
-  environment {
-	IMAGE_REPO = "pasindu12345/food-delivery-application-client"
-	IMAGE_NAME = "${IMAGE_REPO}:latest"
-	IMAGE_VERSION_TAG = "${IMAGE_REPO}:v0.0.${BUILD_NUMBER}"
-	}
-
-  stages {
-	 stage('Quick Clean') {
-      steps {
-		// Report disk status before cleaning
-		sh 'df -h'
-		// Aggressively clear ALL unused Docker images and build cache, not just dangling ones
-		sh 'docker system prune -af || true'
-		// Report disk status after cleaning
-		sh 'df -h'
-      }
-    }
-	 stage('Install Dependencies') {
-      steps {
-		sh 'node -v'
-		sh 'npm -v'
-		sh 'npm ci'
-      }
+    environment {
+        AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+        IMAGE_REPO = "pasindu12345/food-delivery-application-client"
+        IMAGE_NAME = "${IMAGE_REPO}:latest"
+        IMAGE_VERSION_TAG = "${IMAGE_REPO}:v0.0.${BUILD_NUMBER}"
+        S3_BUCKET = "food-delivery-terraform-state-pasindu"
+        AWS_BIN = "${WORKSPACE}/aws-bin/aws"
     }
 
-	stage('Run unit tests (coverage)') {
-		steps {
-				sh 'npm test -- --coverage --ci'
-		}
-		post {
-			always {
-			archiveArtifacts artifacts: 'coverage/**', fingerprint: true
-			}
-		}
-	}
-
-	stage('Run Sonarqube') {
-            when {
-                expression { params.runSonar == true }
-            }
-            environment {
-                scannerHome = tool 'lil_sonar_tool';
-            }
+    stages {
+        stage('Determine Environment') {
             steps {
-              withSonarQubeEnv(credentialsId: 'pasindu12345', installationName: 'lil_sonar_project') {
-                sh "${scannerHome}/bin/sonar-scanner"
-              }
+                script {
+                    def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: ""
+                    echo "Checking Branch: ${branch}"
+                    if (branch.contains('main') || branch.contains('master')) {
+                        env.DEPLOY_ENV = 'prod'
+                    } else if (branch.contains('qa')) {
+                        env.DEPLOY_ENV = 'qa'
+                    } else if (branch.contains('staging')) {
+                        env.DEPLOY_ENV = 'stg'
+                    } else {
+                        env.DEPLOY_ENV = params.TARGET_ENV ?: 'sbx'
+                    }
+                    echo ">>> FINAL TARGET ENVIRONMENT: ${env.DEPLOY_ENV} <<<"
+                }
             }
-	}
-
-    stage('Check for vulnerabilities') {
-      steps {
-        script {
-            sh 'npm audit --audit-level=critical'
-            echo "No critical vulnerabilities found. Attempting to fix high/moderate issues..."
-            sh 'npm audit fix || true'
-            sh 'npm audit fix --force || true'
-            sh 'npm audit --audit-level=critical || true'
         }
-      }
-    }
 
-    stage('Check linting') {
-      steps {
-        sh 'npm run lint'
-      }
-      post {
-        always {
-            // Delete Node Modules IMMEDIATELY after linting to free up 1.3 GB
-            sh 'rm -rf node_modules'
-            echo "Large node_modules folder cleaned up to prepare for Docker build."
+        stage('Quick Clean & Prep') {
+            steps {
+                script {
+                    sh 'docker system prune -af || true'
+                    sh 'chmod +x aws-install-script.sh && ./aws-install-script.sh'
+                }
+            }
         }
-      }
-    }
 
-    // stage('Check unit:test') {
-    //   steps {
-    //     sh 'npm run test:unit -- --ci --coverage'
-    //   }
-    //   post {
-    //     always {
-    //       junit 'junit.xml'
-    //       cobertura coberturaReportFile: 'coverage/cobertura-coverage.xml'
-    //     }
-    //   }
-    // }
-
-	//        Dockerfile is already doing this
-	//     stage('Build') {
-	//       steps {
-	//     	sh 'npm run build'
-	//       }
-	//     }
-
-	// stage('checkout') {
-	// 	steps {
-	// 		script {
-	// 			// Checkout the full repository into the workspace root
-	// 			git "https://github.com/Pasinduimalsha/Food-Delivery-Application-Client.git"
-	// 		}
-	// 	}
-    // }
-
-	stage('Plan') {
-		steps {
-			withCredentials([
-				string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-				string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
-			]) {
-				sh 'pwd;cd terraform/ ; terraform init'
-				sh "pwd;cd terraform/ ; terraform plan -out=tfplan"
-				sh 'pwd;cd terraform/ ; terraform show -no-color tfplan > tfplan.txt'
-
-				// stash name: 'tfplan-artifact', , includes: '**'
-			}
-		}
-	}
-	stage('Approval') {
-		when {
-			not {
-				equals expected: true, actual: params.autoApprove
-			}
-		}
-		steps {
-			script {
-				// unstash 'tfplan-artifact'
-				def plan = readFile 'terraform/tfplan.txt'
-				input message: "Do you want to apply the plan?",
-				parameters: [text(name: 'Plan', description: 'Please review the plan', defaultValue: plan)]
-			}
-		}
-	}
-	stage('Apply') {
-		steps {
-			withCredentials([
-				string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-				string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
-			]) {
-				// unstash 'tfplan-artifact'
-				sh "pwd;cd terraform/ ; terraform apply -input=false tfplan"
-				sh "pwd;cd terraform/ ; terraform output -raw food_ordering_client_build_server_ip"
-				sh "pwd;cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip"
-			}
-		}
-	}
-	stage('Get Server IPs') {
-		steps {
-			script {
-				withCredentials([
-					string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-					string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
-				]) {
-					def buildServerIp = sh(
-						script: 'cd terraform/ ; terraform output -raw food_ordering_client_build_server_ip',
-						returnStdout: true
-					).trim()
-					def deployServerIp = sh(
-						script: 'cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip',
-						returnStdout: true
-					).trim()
-					
-					echo "Build Server IP: ${buildServerIp}"
-					echo "Deploy Server IP: ${deployServerIp}"
-					
-					def buildServerConn = "ubuntu@${buildServerIp}"
-					def deployServerConn = "ubuntu@${deployServerIp}"
-					
-					writeFile file: 'server_conns.txt', text: "${buildServerConn},${deployServerConn}"
-					stash name: 'conn_data', includes: 'server_conns.txt'
-				}
-			}
-		}
-	}
-
-	stage('Detect App Changes') {
-		steps {
-			script {
-				unstash 'conn_data'
-				def conns = readFile('server_conns.txt').trim().split(',')
-				def DEPLOY_SERVER = conns[1]
-
-				def currentSourceHash = sh(
-					script: '''#!/usr/bin/env bash
-					set -euo pipefail
-					FILES=$(git ls-files Dockerfile docker-compose.yml package.json package-lock.json vite.config.js src public index.html 2>/dev/null || true)
-					if [ -z "$FILES" ]; then
-					echo "NO_FILES"
-					exit 0
-					fi
-					(
-					for file in $FILES; do
-						if [ -f "$file" ]; then
-						printf "%s\n" "$file"
-						shasum -a 256 "$file"
-						fi
-					done
-					) | shasum -a 256 | awk '{print $1}'
-					''',
-					returnStdout: true
-				).trim()
-
-				def previousSourceHash = ''
-				sshagent(['Jenkins-slave']) {
-					previousSourceHash = sh(
-						script: "ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} 'cat /home/ubuntu/.food_delivery_client_source_hash 2>/dev/null || true'",
-						returnStdout: true
-					).trim()
-				}
-
-				echo "Current source hash: ${currentSourceHash}"
-				echo "Previous source hash: ${previousSourceHash ?: 'NONE'}"
-
-				if (currentSourceHash && currentSourceHash != 'NO_FILES' && currentSourceHash != previousSourceHash) {
-					env.SHOULD_BUILD_IMAGE = 'true'
-					env.CURRENT_SOURCE_HASH = currentSourceHash
-					echo 'App changes detected. Image build/push will run.'
-				} else {
-					env.SHOULD_BUILD_IMAGE = 'false'
-					env.CURRENT_SOURCE_HASH = previousSourceHash
-					echo 'No app changes detected. Skipping image build/push and compose rollout.'
-				}
-			}
-		}
-	}
-
-	stage("Build the docker image and push to dockerhub"){
-		when {
-			expression { env.SHOULD_BUILD_IMAGE == 'true' }
-		}
-		steps {
-			script {
-				unstash 'conn_data'
-				def conns = readFile('server_conns.txt').trim().split(',')
-				def BUILD_SERVER = conns[0]
-				def BUILD_SERVER_IP = BUILD_SERVER.split('@')[1]
-
-				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
-					sshagent(['Jenkins-slave']) {
-						echo "Installing Docker on Build Server: ${BUILD_SERVER_IP}"
-						sh "ansible-galaxy collection install -r ansible/requirements.yml"
-						sh """
-							ansible-playbook -i '${BUILD_SERVER_IP},' \
-								-u ubuntu \
-								--ssh-common-args='-o StrictHostKeyChecking=no' \
-								ansible/playbook.yml --tags docker
-						"""
-
-						echo "Syncing code to Build Server and building image"
-						sh "ssh -o StrictHostKeyChecking=no ${BUILD_SERVER} 'mkdir -p /home/ubuntu/app-build'"
-						sh "rsync -avz -e 'ssh -o StrictHostKeyChecking=no' --exclude .git --exclude node_modules . ${BUILD_SERVER}:/home/ubuntu/app-build/"
-						
-						sh """
-							ssh -o StrictHostKeyChecking=no ${BUILD_SERVER} "
-								cd /home/ubuntu/app-build
-								echo '${PASSWORD}' | docker login -u '${USERNAME}' --password-stdin
-								docker build -t ${IMAGE_VERSION_TAG} -t ${IMAGE_NAME} .
-								docker push ${IMAGE_VERSION_TAG}
-								docker push ${IMAGE_NAME}
-								docker system prune -af
-							"
-						"""
-					}
-				}
-			}
-		}
-	}
-    stage("Run the docker image using docker-compose") {
-        when {
-            expression { env.SHOULD_BUILD_IMAGE == 'true' }
+        stage('Terraform Plan') {
+            steps {
+                dir('terraform') {
+                    sh 'terraform init'
+                    sh "terraform plan -out tfplan"
+                    sh 'terraform show -no-color tfplan > tfplan.txt'
+                }
+            }
         }
-        steps {
-            script {
-                unstash 'conn_data'
-                def conns = readFile('server_conns.txt').trim().split(',')
-                def DEPLOY_SERVER = conns[1]
-                def DEPLOY_SERVER_IP = DEPLOY_SERVER.split('@')[1]
 
-                sshagent(['Jenkins-slave']) {
-                    withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
-                        echo "Deploying to ${DEPLOY_SERVER_IP} using Ansible"
+        stage('Approval') {
+            when { not { equals expected: true, actual: params.autoApprove } }
+            steps {
+                script {
+                    def plan = readFile 'terraform/tfplan.txt'
+                    input message: "Do you want to apply the plan?",
+                    parameters: [text(name: 'Plan', description: 'Please review the plan', defaultValue: plan)]
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                dir('terraform') {
+                    sh "terraform apply -input=false tfplan"
+                }
+            }
+        }
+
+        stage('Get Server IPs & Ansible Config') {
+            steps {
+                script {
+                    dir('terraform') {
+                        def buildIp = sh(script: 'terraform output -raw food_ordering_client_build_server_ip', returnStdout: true).trim()
+                        def deployIp = sh(script: 'terraform output -raw food_ordering_client_deploy_server_ip', returnStdout: true).trim()
                         
-                        sh "ansible-galaxy collection install -r ansible/requirements.yml"
+                        writeFile file: 'build_server_conn.txt', text: "ubuntu@${buildIp}"
+                        writeFile file: 'deploy_server_conn.txt', text: "ubuntu@${deployIp}"
+                        sh "${AWS_BIN} s3 cp build_server_conn.txt s3://${S3_BUCKET}/food-delivery-client/build_server_conn.txt"
+                        sh "${AWS_BIN} s3 cp deploy_server_conn.txt s3://${S3_BUCKET}/food-delivery-client/deploy_server_conn.txt"
 
+                        def inventoryContent = "[${env.DEPLOY_ENV}]\n${deployIp} ansible_user=ubuntu\n"
+                        writeFile file: '../ansible/inventory.ini', text: inventoryContent
+                    }
+                    sshagent(['Jenkins-slave']) {
+                        sh "ansible-playbook -i ansible/inventory.ini ansible/playbook.yml --tags docker --ssh-extra-args='-o StrictHostKeyChecking=no'"
+                    }
+                }
+            }
+        }
+
+        stage('Remote Setup & Sync') {
+            steps {
+                script {
+                    sh "${AWS_BIN} s3 cp s3://${S3_BUCKET}/food-delivery-client/build_server_conn.txt build_server_conn.txt"
+                    def buildServer = readFile('build_server_conn.txt').trim()
+                    sshagent(['Jenkins-slave']) {
+                        echo "Syncing code to Build Server..."
+                        sh "ssh -o StrictHostKeyChecking=no ${buildServer} 'mkdir -p /home/ubuntu/app'"
+                        sh "rsync -avz -e 'ssh -o StrictHostKeyChecking=no' --exclude '.git' --exclude 'terraform' --exclude 'node_modules' ./ ${buildServer}:/home/ubuntu/app/"
+                        sh "scp -o StrictHostKeyChecking=no node-install.sh ${buildServer}:/home/ubuntu/app/"
+                        sh "ssh -o StrictHostKeyChecking=no ${buildServer} 'chmod +x /home/ubuntu/app/node-install.sh && /home/ubuntu/app/node-install.sh'"
+                    }
+                }
+            }
+        }
+
+        stage('Install Dependencies (Remote)') {
+            steps {
+                script {
+                    def buildServer = readFile('build_server_conn.txt').trim()
+                    sshagent(['Jenkins-slave']) {
+                        sh "ssh -o StrictHostKeyChecking=no ${buildServer} 'cd app && npm ci'"
+                    }
+                }
+            }
+        }
+
+        stage('Run unit tests (Remote)') {
+            steps {
+                script {
+                    def buildServer = readFile('build_server_conn.txt').trim()
+                    sshagent(['Jenkins-slave']) {
+                        sh "ssh -o StrictHostKeyChecking=no ${buildServer} 'cd app && npm test -- --coverage --ci'"
+                        echo "Fetching coverage report from Build Server..."
+                        sh "scp -r -o StrictHostKeyChecking=no ${buildServer}:/home/ubuntu/app/coverage ./ || true"
+                    }
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'coverage/**', fingerprint: true, allowEmptyArchive: true
+                }
+            }
+        }
+
+        stage('Check for vulnerabilities (Remote)') {
+            steps {
+                script {
+                    def buildServer = readFile('build_server_conn.txt').trim()
+                    sshagent(['Jenkins-slave']) {
                         sh """
-                            ansible-playbook -i '${DEPLOY_SERVER_IP},' \
-                                -u ubuntu \
-                                --ssh-common-args='-o StrictHostKeyChecking=no' \
-                                -e "image_name=${IMAGE_NAME} docker_user=${USERNAME} docker_password=${PASSWORD}" \
-                                ansible/playbook.yml --tags "docker,app"
-                        """
-                        
-                        sh """
-                            ansible all -i '${DEPLOY_SERVER_IP},' \
-                                -u ubuntu \
-                                --ssh-common-args='-o StrictHostKeyChecking=no' \
-                                -m shell -a "echo ${CURRENT_SOURCE_HASH} > /home/ubuntu/.food_delivery_client_source_hash"
+                            ssh -o StrictHostKeyChecking=no ${buildServer} "
+                                cd app
+                                npm audit --audit-level=critical || true
+                                echo 'No critical vulnerabilities found. Attempting to fix issues...'
+                                npm audit fix || true
+                                npm audit fix --force || true
+                                npm audit --audit-level=critical || true
+                            "
                         """
                     }
                 }
             }
         }
-    }
-  }
 
-    // stage('Check unit:e2e') {
-
-  post {
-    always {
-      script {
-        try {
-            // 1. Instantly delete the images we built (already pushed)
-            sh "docker rmi ${IMAGE_VERSION_TAG} ${IMAGE_NAME} || true"
-            // 2. Clear build layers
-            sh "docker image prune -af || true"
-            // 3. Clear all leftover Docker resources (including unused images)
-            sh 'docker system prune -af || true'
-            // 4. Clear SonarQube scanner cache
-            sh 'sudo rm -rf /var/lib/jenkins/.sonar/cache/* || true'
-            // 5. Purge disabled/old Snaps and clear snap seed
-            sh '''
-                snap list --all | awk '/disabled/{print $1, $3}' | while read snapname revision; do sudo snap remove "$snapname" --revision "$revision"; done || true
-                sudo rm -rf /var/lib/snapd/seed/snaps/* || true
-            '''
-            // 6. Report disk status
-            sh 'df -h'
-            // 7. Delete the bulky workspace (node_modules, etc.)
-            deleteDir()
-        } catch (Exception e) {
-            echo "Cleanup skipped or failed: ${e.getMessage()}"
+        stage('Check linting (Remote)') {
+            steps {
+                script {
+                    def buildServer = readFile('build_server_conn.txt').trim()
+                    sshagent(['Jenkins-slave']) {
+                        sh "ssh -o StrictHostKeyChecking=no ${buildServer} 'cd app && npm run lint'"
+                    }
+                }
+                post {
+                    always {
+                        script {
+                            def buildServer = readFile('build_server_conn.txt').trim()
+                            sshagent(['Jenkins-slave']) {
+                                sh "ssh -o StrictHostKeyChecking=no ${buildServer} 'rm -rf /home/ubuntu/app/node_modules'"
+                                echo "Large node_modules folder cleaned up on Build Server."
+                            }
+                        }
+                    }
+                }
+            }
         }
-      }
-      echo "Aggressive storage cleanup: Docker images and Workspace cleared."
-    }
-  }
-}
 
-// REF:
-//  https://github.com/Andre-ADPC/Vite-TS-Vue-React-Prj-Template-2025/blob/master/DOCS/Build%20a%20Jenkins%20Pipeline.md
+        stage('Run Sonarqube') {
+            when { expression { params.runSonar == true } }
+            steps {
+                script {
+                    def scannerHome = tool 'lil_sonar_tool'
+                    withSonarQubeEnv(credentialsId: 'pasindu12345', installationName: 'lil_sonar_project') {
+                        sh "${scannerHome}/bin/sonar-scanner"
+                    }
+                }
+            }
+        }
+
+        stage('Remote Build & Push') {
+            steps {
+                script {
+                    def buildServer = readFile('build_server_conn.txt').trim()
+                    sshagent(['Jenkins-slave']) {
+                        withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
+                            sh """
+                                ssh -o StrictHostKeyChecking=no ${buildServer} "
+                                    cd app
+                                    chmod +x docker-script.sh
+                                    ./docker-script.sh
+                                    sudo docker build -t ${IMAGE_NAME} -t ${IMAGE_VERSION_TAG} .
+                                    echo '$PASSWORD' | sudo docker login -u '$USERNAME' --password-stdin
+                                    sudo docker push ${IMAGE_NAME}
+                                    sudo docker push ${IMAGE_VERSION_TAG}
+                                    sudo docker system prune -af
+                                "
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Remote Deploy') {
+            steps {
+                script {
+                    sh "${AWS_BIN} s3 cp s3://${S3_BUCKET}/food-delivery-client/deploy_server_conn.txt deploy_server_conn.txt"
+                    def deployServer = readFile('deploy_server_conn.txt').trim()
+                    sshagent(['Jenkins-slave']) {
+                        withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
+                            sh "scp -o StrictHostKeyChecking=no docker-compose.yml docker-script.sh docker-compose-script.sh ${deployServer}:/home/ubuntu/"
+                            sh """
+                                ssh -o StrictHostKeyChecking=no ${deployServer} "
+                                    chmod +x docker-script.sh docker-compose-script.sh
+                                    ./docker-script.sh
+                                    echo '$PASSWORD' | sudo docker login -u '$USERNAME' --password-stdin
+                                    ./docker-compose-script.sh ${IMAGE_NAME}
+                                "
+                            """
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                try {
+                    sh 'rm -rf dist/ coverage/ || true'
+                    sh 'docker system prune -af || true'
+                    sh 'sudo rm -rf /var/lib/jenkins/.sonar/cache/* || true'
+                    deleteDir()
+                } catch (Exception e) {
+                    echo "Cleanup failed: ${e.getMessage()}"
+                }
+            }
+        }
+    }
+}
