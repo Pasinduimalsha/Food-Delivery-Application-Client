@@ -10,5 +10,5 @@
     # docker_password: ""
 
   roles:
-    - docker
-    - app
+    - { role: docker, tags: ["docker"] }
+    - { role: app, tags: ["app"] }

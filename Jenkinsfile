@@ -152,6 +152,7 @@ pipeline {
 			]) {
 				// unstash 'tfplan-artifact'
 				sh "pwd;cd terraform/ ; terraform apply -input=false tfplan"
+				sh "pwd;cd terraform/ ; terraform output -raw food_ordering_client_build_server_ip"
 				sh "pwd;cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip"
 			}
 		}
@@ -163,16 +164,23 @@ pipeline {
 					string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
 					string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
 				]) {
-					def clientServerIp = sh(
+					def buildServerIp = sh(
+						script: 'cd terraform/ ; terraform output -raw food_ordering_client_build_server_ip',
+						returnStdout: true
+					).trim()
+					def deployServerIp = sh(
 						script: 'cd terraform/ ; terraform output -raw food_ordering_client_deploy_server_ip',
 						returnStdout: true
 					).trim()
-					echo "Client Server IP: ${clientServerIp}"
-					def clientServerConn = "ubuntu@${clientServerIp}"
-					echo "Build Server SSH Connection String: ${clientServerConn}"
-
-					writeFile file: 'client_server_conn.txt', text: clientServerConn
-					stash name: 'client_conn_data', includes: 'client_server_conn.txt'
+					
+					echo "Build Server IP: ${buildServerIp}"
+					echo "Deploy Server IP: ${deployServerIp}"
+					
+					def buildServerConn = "ubuntu@${buildServerIp}"
+					def deployServerConn = "ubuntu@${deployServerIp}"
+					
+					writeFile file: 'server_conns.txt', text: "${buildServerConn},${deployServerConn}"
+					stash name: 'conn_data', includes: 'server_conns.txt'
 				}
 			}
 		}
@@ -181,8 +189,9 @@ pipeline {
 	stage('Detect App Changes') {
 		steps {
 			script {
-				unstash 'client_conn_data'
-				def DEPLOY_SERVER = readFile('client_server_conn.txt').trim()
+				unstash 'conn_data'
+				def conns = readFile('server_conns.txt').trim().split(',')
+				def DEPLOY_SERVER = conns[1]
 
 				def currentSourceHash = sh(
 					script: '''#!/usr/bin/env bash
@@ -234,13 +243,37 @@ pipeline {
 		}
 		steps {
 			script {
+				unstash 'conn_data'
+				def conns = readFile('server_conns.txt').trim().split(',')
+				def BUILD_SERVER = conns[0]
+				def BUILD_SERVER_IP = BUILD_SERVER.split('@')[1]
+
 				withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
-					echo "Packing the code and creating docker images"
-					sh "ls -la"
-					sh "docker build -t ${IMAGE_VERSION_TAG} -t ${IMAGE_NAME} ."
-					sh 'echo "$PASSWORD" | docker login -u "$USERNAME" --password-stdin'
-					sh "docker push ${IMAGE_VERSION_TAG}"
-					sh "docker push ${IMAGE_NAME}"
+					sshagent(['Jenkins-slave']) {
+						echo "Installing Docker on Build Server: ${BUILD_SERVER_IP}"
+						sh "ansible-galaxy collection install -r ansible/requirements.yml"
+						sh """
+							ansible-playbook -i '${BUILD_SERVER_IP},' \
+								-u ubuntu \
+								--ssh-common-args='-o StrictHostKeyChecking=no' \
+								ansible/playbook.yml --tags docker
+						"""
+
+						echo "Syncing code to Build Server and building image"
+						sh "ssh -o StrictHostKeyChecking=no ${BUILD_SERVER} 'mkdir -p /home/ubuntu/app-build'"
+						sh "rsync -avz -e 'ssh -o StrictHostKeyChecking=no' --exclude .git --exclude node_modules . ${BUILD_SERVER}:/home/ubuntu/app-build/"
+						
+						sh """
+							ssh -o StrictHostKeyChecking=no ${BUILD_SERVER} "
+								cd /home/ubuntu/app-build
+								echo '${PASSWORD}' | docker login -u '${USERNAME}' --password-stdin
+								docker build -t ${IMAGE_VERSION_TAG} -t ${IMAGE_NAME} .
+								docker push ${IMAGE_VERSION_TAG}
+								docker push ${IMAGE_NAME}
+								docker system prune -af
+							"
+						"""
+					}
 				}
 			}
 		}
@@ -251,28 +284,25 @@ pipeline {
         }
         steps {
             script {
-                unstash 'client_conn_data'
-                // Parse the IP from 'ubuntu@IP'
-                def DEPLOY_SERVER_CONN = readFile('client_server_conn.txt').trim()
-                def DEPLOY_SERVER_IP = DEPLOY_SERVER_CONN.split('@')[1]
+                unstash 'conn_data'
+                def conns = readFile('server_conns.txt').trim().split(',')
+                def DEPLOY_SERVER = conns[1]
+                def DEPLOY_SERVER_IP = DEPLOY_SERVER.split('@')[1]
 
                 sshagent(['Jenkins-slave']) {
                     withCredentials([usernamePassword(credentialsId: '12345678', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
                         echo "Deploying to ${DEPLOY_SERVER_IP} using Ansible"
                         
-                        // 1. Install necessary collections locally on Jenkins
                         sh "ansible-galaxy collection install -r ansible/requirements.yml"
 
-                        // 2. Run the deployment playbook
                         sh """
                             ansible-playbook -i '${DEPLOY_SERVER_IP},' \
                                 -u ubuntu \
                                 --ssh-common-args='-o StrictHostKeyChecking=no' \
                                 -e "image_name=${IMAGE_NAME} docker_user=${USERNAME} docker_password=${PASSWORD}" \
-                                ansible/playbook.yml
+                                ansible/playbook.yml --tags "docker,app"
                         """
                         
-                        // Update the success hash on the server using an Ansible ad-hoc command to stay consistent
                         sh """
                             ansible all -i '${DEPLOY_SERVER_IP},' \
                                 -u ubuntu \
