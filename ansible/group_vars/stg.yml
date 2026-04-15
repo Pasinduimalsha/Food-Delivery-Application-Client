@@ -1,0 +1,3 @@
+node_env: "staging"
+api_url: "https://staging-api.food-ordering.com"
+deploy_env: "stg"

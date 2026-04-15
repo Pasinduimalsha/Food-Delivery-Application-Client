@@ -1,0 +1,23 @@
+---
+- name: Server Environment Management
+  hosts: all
+  become: yes
+  tasks:
+    - name: Ensure app directory exists
+      file:
+        path: /home/ubuntu/app
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Create environment configuration file
+      copy:
+        content: |
+          NODE_ENV={{ node_env }}
+          API_URL={{ api_url }}
+          DEPLOY_ENVIRONMENT={{ deploy_env }}
+        dest: /home/ubuntu/app/.env
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'

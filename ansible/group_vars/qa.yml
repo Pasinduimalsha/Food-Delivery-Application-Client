@@ -1,0 +1,3 @@
+node_env: "qa"
+api_url: "https://qa-api.food-ordering.com"
+deploy_env: "qa"

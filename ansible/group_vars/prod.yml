@@ -1,0 +1,3 @@
+node_env: "prod"
+api_url: "https://api.food-ordering.com"
+deploy_env: "prod"

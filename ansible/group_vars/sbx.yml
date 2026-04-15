@@ -1,0 +1,3 @@
+node_env: "sbx"
+api_url: "https://sbx-api.food-ordering.com"
+deploy_env: "sbx"
