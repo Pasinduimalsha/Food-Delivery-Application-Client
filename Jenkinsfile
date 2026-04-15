@@ -96,7 +96,8 @@ pipeline {
                         writeFile file: '../ansible/inventory.ini', text: inventoryContent
                     }
                     sshagent(['Jenkins-slave']) {
-                        sh "ansible-playbook -i ansible/inventory.ini ansible/playbook.yml --tags docker --ssh-extra-args='-o StrictHostKeyChecking=no'"
+                        echo "Managing Server Environment: ${env.DEPLOY_ENV}"
+                        sh "ansible-playbook -i ansible/inventory.ini ansible/server-management.yml --limit ${env.DEPLOY_ENV} --ssh-extra-args='-o StrictHostKeyChecking=no'"
                     }
                 }
             }
