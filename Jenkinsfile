@@ -81,6 +81,8 @@ pipeline {
         stage('Get Server IPs & Ansible Config') {
             steps {
                 script {
+                    echo "Waiting for instances to boot..."
+                    sh 'sleep 60'
                     dir('terraform') {
                         def buildIp = sh(script: 'terraform output -raw food_ordering_client_build_server_ip', returnStdout: true).trim()
                         def deployIp = sh(script: 'terraform output -raw food_ordering_client_deploy_server_ip', returnStdout: true).trim()
