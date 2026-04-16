@@ -18,6 +18,7 @@ pipeline {
         IMAGE_VERSION_TAG = "${IMAGE_REPO}:v0.0.${BUILD_NUMBER}"
         S3_BUCKET = "food-delivery-terraform-state-pasindu"
         AWS_BIN = "${WORKSPACE}/aws-bin/aws"
+        TMPDIR = "${WORKSPACE}/tmp"
     }
 
     stages {
@@ -56,6 +57,7 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 dir('terraform') {
+                    sh 'mkdir -p $TMPDIR'
                     sh 'terraform init'
                     sh "terraform plan -out tfplan"
                     sh 'terraform show -no-color tfplan > tfplan.txt'
