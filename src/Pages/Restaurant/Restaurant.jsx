@@ -1,64 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Clock, Phone, MapPin, Mail, Plus, Edit, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import RestaurantService from '../../services/RestaurantService';
+import { toast } from 'react-toastify';
 
 const Restaurant = () => {
   const navigate = useNavigate();
 
-  const initialRestaurants = [
-    {
-      id: 1,
-      name: "Italian Delight",
-      contactPerson: "Marco Rossi",
-      phone: "+1 (555) 123-4567",
-      email: "info@italiandelight.com",
-      address: "123 Pasta Street, Italian Quarter, NY 10001",
-      openTime: "11:00",
-      closeTime: "22:00",
-      cuisine: "Italian",
-      description: "Authentic Italian cuisine featuring homemade pasta and wood-fired pizzas."
-    },
-    {
-      id: 2,
-      name: "Sushi Master",
-      contactPerson: "Yuki Tanaka",
-      phone: "+1 (555) 234-5678",
-      email: "contact@sushimaster.com",
-      address: "456 Ocean Avenue, Japanese District, NY 10002",
-      openTime: "12:00",
-      closeTime: "23:00",
-      cuisine: "Japanese",
-      description: "Premium sushi and sashimi prepared by master chefs using fresh ingredients."
-    },
-    {
-      id: 3,
-      name: "Spice Paradise",
-      contactPerson: "Raj Patel",
-      phone: "+1 (555) 345-6789",
-      email: "info@spiceparadise.com",
-      address: "789 Curry Lane, Spice Market, NY 10003",
-      openTime: "10:30",
-      closeTime: "22:30",
-      cuisine: "Indian",
-      description: "Aromatic Indian dishes with authentic spices and traditional recipes."
-    }
-  ];
-
   const [showForm, setShowForm] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [restaurantToDelete, setRestaurantToDelete] = useState(null);
-  const [restaurants, setRestaurants] = useState(initialRestaurants);
+  const [restaurants, setRestaurants] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchRestaurants();
+  }, []);
+
+  const fetchRestaurants = async () => {
+    try {
+      const data = await RestaurantService.getAll();
+      setRestaurants(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to fetch restaurants. Is the backend running?");
+    } finally {
+      setLoading(false);
+    }
+  };
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
-    contactPerson: '',
-    phone: '',
-    email: '',
-    address: '',
-    openTime: '',
-    closeTime: '',
-    cuisine: '',
-    description: ''
+    description: '',
+    location: '',
+    contact_number: '',
+    open_hours: '',
+    status: 'Open'
   });
 
   const handleInputChange = (e) => {
@@ -80,43 +57,53 @@ const Restaurant = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (restaurantToDelete) {
-      setRestaurants(prev => 
-        prev.filter(restaurant => restaurant.id !== restaurantToDelete.id)
-      );
-      setShowDeleteModal(false);
-      setRestaurantToDelete(null);
+      try {
+        await RestaurantService.delete(restaurantToDelete.id);
+        setRestaurants(prev => 
+          prev.filter(restaurant => restaurant.id !== restaurantToDelete.id)
+        );
+        toast.success("Restaurant deleted safely!");
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to delete restaurant.");
+      } finally {
+        setShowDeleteModal(false);
+        setRestaurantToDelete(null);
+      }
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingId) {
-      setRestaurants(prev => prev.map(restaurant => 
-        restaurant.id === editingId ? { ...formData, id: editingId } : restaurant
-      ));
-      setEditingId(null);
-    } else {
-      const newRestaurant = {
-        id: Date.now(),
-        ...formData
-      };
-      setRestaurants(prev => [newRestaurant, ...prev]);
-    }
+    try {
+      if (editingId) {
+        const updated = await RestaurantService.update(editingId, formData);
+        setRestaurants(prev => prev.map(restaurant => 
+          restaurant.id === editingId ? updated : restaurant
+        ));
+        setEditingId(null);
+        toast.success("Restaurant updated successfully!");
+      } else {
+        const newRestaurant = await RestaurantService.create(formData);
+        setRestaurants(prev => [newRestaurant, ...prev]);
+        toast.success("New Restaurant Created!");
+      }
 
-    setFormData({
-      name: '',
-      contactPerson: '',
-      phone: '',
-      email: '',
-      address: '',
-      openTime: '',
-      closeTime: '',
-      cuisine: '',
-      description: ''
-    });
-    setShowForm(false);
+      setFormData({
+        name: '',
+        description: '',
+        location: '',
+        contact_number: '',
+        open_hours: '',
+        status: 'Open'
+      });
+      setShowForm(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save restaurant details.");
+    }
   };
 
   const DeleteConfirmationModal = () => (
@@ -149,7 +136,7 @@ const Restaurant = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="w-full h-full p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Restaurant Management</h1>
@@ -158,14 +145,11 @@ const Restaurant = () => {
               setEditingId(null);
               setFormData({
                 name: '',
-                contactPerson: '',
-                phone: '',
-                email: '',
-                address: '',
-                openTime: '',
-                closeTime: '',
-                cuisine: '',
-                description: ''
+                description: '',
+                location: '',
+                contact_number: '',
+                open_hours: '',
+                status: 'Open'
               });
               setShowForm(true);
             }}
@@ -198,7 +182,7 @@ const Restaurant = () => {
                     <Trash2 size={18} />
                   </button>
                   <button
-                onClick={() => navigate(`/restaurant/${restaurants.id}/menu`)}
+                onClick={() => navigate(`/restaurant/${restaurant.id}/menu`)}
                 className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
               >
                 M
@@ -211,25 +195,21 @@ const Restaurant = () => {
               <div className="space-y-2">
                 <div className="flex items-center text-gray-600">
                   <Clock size={18} className="mr-2" />
-                  <span>{restaurant.openTime} - {restaurant.closeTime}</span>
+                  <span>{restaurant.open_hours}</span>
                 </div>
                 <div className="flex items-center text-gray-600">
                   <Phone size={18} className="mr-2" />
-                  <span>{restaurant.phone}</span>
-                </div>
-                <div className="flex items-center text-gray-600">
-                  <Mail size={18} className="mr-2" />
-                  <span>{restaurant.email}</span>
+                  <span>{restaurant.contact_number}</span>
                 </div>
                 <div className="flex items-center text-gray-600">
                   <MapPin size={18} className="mr-2" />
-                  <span>{restaurant.address}</span>
+                  <span>{restaurant.location}</span>
                 </div>
               </div>
               
               <div className="mt-4 pt-4 border-t">
-                <span className="inline-block bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm">
-                  {restaurant.cuisine}
+                <span className={`inline-block px-3 py-1 rounded-full text-sm ${restaurant.status === 'Open' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {restaurant.status || 'Closed'}
                 </span>
               </div>
             </div>
@@ -253,83 +233,6 @@ const Restaurant = () => {
                   />
                 </div>
                 <div className="mb-4">
-                  <label className="block text-gray-700">Contact Person</label>
-                  <input
-                    type="text"
-                    name="contactPerson"
-                    value={formData.contactPerson}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700">Phone</label>
-                  <input
-                    type="text"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700">Email</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700">Address</label>
-                  <input
-                    type="text"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700">Open Time</label>
-                  <input
-                    type="time"
-                    name="openTime"
-                    value={formData.openTime}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700">Close Time</label>
-                  <input
-                    type="time"
-                    name="closeTime"
-                    value={formData.closeTime}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700">Cuisine</label>
-                  <input
-                    type="text"
-                    name="cuisine"
-                    value={formData.cuisine}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
                   <label className="block text-gray-700">Description</label>
                   <textarea
                     name="description"
@@ -338,6 +241,52 @@ const Restaurant = () => {
                     className="w-full px-3 py-2 border rounded-md"
                     required
                   />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700">Location</label>
+                  <input
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700">Contact Number</label>
+                  <input
+                    type="text"
+                    name="contact_number"
+                    value={formData.contact_number}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700">Open Hours</label>
+                  <input
+                    type="text"
+                    name="open_hours"
+                    value={formData.open_hours}
+                    onChange={handleInputChange}
+                    placeholder="e.g. 08:00-22:00"
+                    className="w-full px-3 py-2 border rounded-md"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-gray-700">Status</label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    <option value="Open">Open</option>
+                    <option value="Closed">Closed</option>
+                  </select>
                 </div>
                 <div className="flex justify-end space-x-4">
                   <button
