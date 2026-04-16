@@ -30,7 +30,7 @@ const Home = () => {
             <div className="absolute inset-0 bg-black opacity-20 pointer-events-none"></div>
             <div className="w-full md:w-1/2 p-10 md:p-16 z-10 text-white flex flex-col justify-center">
               <span className="inline-block px-4 py-1.5 rounded-full bg-white/20 backdrop-blur-md text-sm font-semibold mb-6 border border-white/30 w-max">
-                🚀 Super Fast Delivery
+                Super Fast Delivery
               </span>
               <h1 className="text-5xl md:text-6xl font-extrabold mb-6 leading-tight">
                 Satisfy Your <br />Cravings <span className="text-yellow-300">Instantly.</span>
