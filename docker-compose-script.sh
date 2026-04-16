@@ -9,10 +9,11 @@ fi
 
 IMAGE_NAME="$1"
 
-# Install docker-compose binary if not present
-if ! command -v docker-compose >/dev/null 2>&1; then
-	echo "Installing docker-compose..."
-	sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+# Upgrade docker-compose binary to modern v2 to fix KeyError 'ContainerConfig'
+CURRENT_VERSION=$(docker-compose --version 2>/dev/null || echo "none")
+if [[ "$CURRENT_VERSION" == *"1.29"* ]] || ! command -v docker-compose >/dev/null 2>&1; then
+	echo "Installing/Upgrading docker-compose to v2.29.2..."
+	sudo curl -L "https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 	sudo chmod +x /usr/local/bin/docker-compose
 	if [ ! -e /usr/bin/docker-compose ]; then
 		sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
