@@ -1,9 +1,33 @@
-import { Building2, Search, Bell, User } from 'lucide-react'
+import { Building2, Search, Bell, User, LogOut } from 'lucide-react'
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
 const Navbar = () => {
   const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+
+  const checkUser = () => {
+    const loggedInUser = localStorage.getItem('currentUser');
+    if (loggedInUser) {
+      setUser(JSON.parse(loggedInUser));
+    } else {
+      setUser(null);
+    }
+  };
+
+  useEffect(() => {
+    checkUser();
+    window.addEventListener('authChange', checkUser);
+    return () => window.removeEventListener('authChange', checkUser);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('currentUser');
+    window.dispatchEvent(new Event('authChange'));
+    toast.success('Logged out successfully');
+    navigate('/');
+  };
 
   return (
     <nav className="fixed w-full z-50 glass top-0 left-0">
@@ -43,9 +67,26 @@ const Navbar = () => {
               <Building2 size={18} />
               <span>Restaurants</span>
             </button>
-            <button onClick={() => toast.info('User profiles coming soon!')} className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition">
-              <User size={20} />
-            </button>
+            {user ? (
+              <div className="flex items-center space-x-3">
+                <span className="font-semibold text-gray-700 hidden sm:block">Hi, {user.username}</span>
+                <button 
+                  onClick={handleLogout} 
+                  className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 hover:bg-red-200 transition"
+                  title="Logout"
+                >
+                  <LogOut size={20} />
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => navigate('/login')} 
+                className="flex items-center space-x-2 bg-gray-100 text-gray-800 px-4 py-2.5 rounded-full hover:bg-gray-200 transition font-semibold"
+              >
+                <User size={18} />
+                <span className="hidden sm:inline">Sign In</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
