@@ -1,33 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Plus, X, Edit, Trash2 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
+import MenuService from '../../services/MenuService';
+import { toast } from 'react-toastify';
 
 const MenuManagement = () => {
   const { restaurantId } = useParams();
-  console.log(restaurantId);
-
-  const initialMenus = [
-    {
-      id: 1,
-      restaurantId: 1,
-      name: "Spaghetti Carbonara",
-      description: "Classic Italian pasta with creamy egg sauce, pancetta, and parmesan.",
-      price: 12.99,
-      ingredients: "Spaghetti, Eggs, Pancetta, Parmesan, Black Pepper",
-      portionSize: "Regular",
-      category: "Main Course"
-    },
-    {
-      id: 2,
-      restaurantId: 2,
-      name: "Margherita Pizza",
-      description: "Traditional pizza with tomato sauce, fresh mozzarella, and basil.",
-      price: 9.99,
-      ingredients: "Pizza Dough, Tomato Sauce, Mozzarella, Basil",
-      portionSize: "Large",
-      category: "Main Course"
-    }
-  ];
 
   const [showForm, setShowForm] = useState(false);
   const [menus, setMenus] = useState([]);
@@ -41,10 +19,23 @@ const MenuManagement = () => {
     category: ''
   });
 
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    const filteredMenus = initialMenus.filter(menu => menu.restaurantId === parseInt(restaurantId));
-    setMenus(filteredMenus);
+    fetchMenus();
   }, [restaurantId]);
+
+  const fetchMenus = async () => {
+    try {
+      const data = await MenuService.getAll(restaurantId);
+      setMenus(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load menus for this restaurant.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -57,27 +48,42 @@ const MenuManagement = () => {
     setShowForm(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this menu item?')) {
-      setMenus(prev => prev.filter(menu => menu.id !== id));
+      try {
+        await MenuService.delete(restaurantId, id);
+        setMenus(prev => prev.filter(menu => menu.id !== id));
+        toast.success("Menu item deleted safely!");
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to delete menu item.");
+      }
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingId) {
-      setMenus(prev => prev.map(menu => menu.id === editingId ? { ...formData, id: editingId, restaurantId: parseInt(restaurantId) } : menu));
-      setEditingId(null);
-    } else {
-      const newMenu = { id: Date.now(), restaurantId: parseInt(restaurantId), ...formData };
-      setMenus(prev => [newMenu, ...prev]);
+    try {
+      if (editingId) {
+        const updated = await MenuService.update(restaurantId, editingId, formData);
+        setMenus(prev => prev.map(menu => menu.id === editingId ? updated : menu));
+        setEditingId(null);
+        toast.success("Menu item updated!");
+      } else {
+        const newMenu = await MenuService.create(restaurantId, formData);
+        setMenus(prev => [newMenu, ...prev]);
+        toast.success("New menu item created!");
+      }
+      setFormData({ name: '', description: '', price: '', ingredients: '', portionSize: '', category: '' });
+      setShowForm(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save menu details.");
     }
-    setFormData({ name: '', description: '', price: '', ingredients: '', portionSize: '', category: '' });
-    setShowForm(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="w-full h-full p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Menu Management</h1>
