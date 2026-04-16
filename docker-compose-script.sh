@@ -29,6 +29,11 @@ if [ ! -f "${COMPOSE_FILE}" ]; then
 fi
 
 echo "Starting docker-compose with ${COMPOSE_FILE}..."
+
+# Forcefully kill and delete the old container so Docker compose v2 doesn't hit a naming collision from v1.29
+sudo docker rm -f food-delivery-application-client || true
+sudo env IMAGE_NAME="${IMAGE_NAME}" docker-compose -f "${COMPOSE_FILE}" down || true
+
 # Pull the absolute newest image from Docker Hub first!
 sudo env IMAGE_NAME="${IMAGE_NAME}" docker-compose -f "${COMPOSE_FILE}" pull
 # Then start the containers using the newly downloaded image
