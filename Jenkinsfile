@@ -43,7 +43,11 @@ pipeline {
         stage('Quick Clean & Prep') {
             steps {
                 script {
-                    sh 'docker system prune -af || true'
+                    echo "Aggressively cleaning disk space..."
+                    sh 'docker system prune -af --volumes || true'
+                    sh 'sudo journalctl --vacuum-time=1h || true'
+                    sh 'sudo apt-get clean || true'
+                    sh 'rm -rf ~/.npm ~/.cache || true'
                     sh 'chmod +x aws-install-script.sh && ./aws-install-script.sh'
                 }
             }
